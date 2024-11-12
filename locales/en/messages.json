@@ -1,0 +1,415 @@
+{
+  "extensionName": {
+    "message": "Multipost",
+    "description": "Multipost Extension"
+  },
+  "extensionDisplayName": {
+    "message": "Multipost",
+    "description": "Multipost Extension"
+  },
+  "extensionDescription": {
+    "message": "Multipost is a tool to help you sync and publish content across multiple platforms.",
+    "description": "Multipost is a tool to help you sync and publish content across multiple platforms."
+  },
+  "popupSettingsTooltip": {
+    "message": "Settings",
+    "description": "Tooltip text for the settings button"
+  },
+  "popupSyncPublicTooltip": {
+    "message": "Sync Publish",
+    "description": "Sync publish button tooltip text"
+  },
+  "popupBubbleboxTooltip": {
+    "message": "Bubblebox",
+    "description": "Tooltip text for the bubblebox button"
+  },
+  "popupGiftTooltip": {
+    "message": "Gift",
+    "description": "Tooltip text for the gift button"
+  },
+  "popupDefaultNickname": {
+    "message": "No Nickname Set",
+    "description": "Default nickname text"
+  },
+  "optionsTitle": {
+    "message": "Multipost Extension",
+    "description": "Options page title"
+  },
+  "optionsViewDocs": {
+    "message": "View Docs",
+    "description": "View docs button text"
+  },
+  "optionsAccountManagement": {
+    "message": "Account Management",
+    "description": "Account management tab title"
+  },
+  "optionsDataSync": {
+    "message": "Data Sync",
+    "description": "Data sync tab title"
+  },
+  "optionsRunningLogs": {
+    "message": "Running Logs",
+    "description": "Running logs tab title"
+  },
+  "optionsDynamicTab": {
+    "message": "Dynamic",
+    "description": "Dynamic tab title"
+  },
+  "optionsEnterDynamicTitle": {
+    "message": "Enter Dynamic Title",
+    "description": "Dynamic title input placeholder"
+  },
+  "optionsEnterDynamicContent": {
+    "message": "Enter Dynamic Content",
+    "description": "Dynamic content input placeholder"
+  },
+  "optionsSelectPublishPlatforms": {
+    "message": "Select Publish Platforms:",
+    "description": "Select publish platforms prompt"
+  },
+  "optionsSyncDynamic": {
+    "message": "Sync Dynamic",
+    "description": "Sync dynamic button text"
+  },
+  "optionsPostTab": {
+    "message": "Post",
+    "description": "Post tab title"
+  },
+  "optionsVideoTab": {
+    "message": "Video",
+    "description": "Video tab title"
+  },
+  "optionsClearLogs": {
+    "message": "Clear Logs",
+    "description": "Clear logs button text"
+  },
+  "optionsFilterLevel": {
+    "message": "Filter Level",
+    "description": "Log level filter placeholder"
+  },
+  "optionsAllLevels": {
+    "message": "All Levels",
+    "description": "All log levels option"
+  },
+  "optionsInfo": {
+    "message": "Info",
+    "description": "Info level log"
+  },
+  "optionsWarning": {
+    "message": "Warning",
+    "description": "Warning level log"
+  },
+  "optionsError": {
+    "message": "Error",
+    "description": "Error level log"
+  },
+  "optionsFilterSource": {
+    "message": "Filter Source",
+    "description": "Log source filter placeholder"
+  },
+  "optionsAllSources": {
+    "message": "All Sources",
+    "description": "All log sources option"
+  },
+  "optionsNoLogs": {
+    "message": "No Logs",
+    "description": "Text displayed when no logs"
+  },
+  "optionsSyncSettingsTitle": {
+    "message": "Sync Service Settings & Management",
+    "description": "Sync settings page title"
+  },
+  "optionsSyncSettingsDescription": {
+    "message": "Here you can manage the data to be synced",
+    "description": "Sync settings page description"
+  },
+  "optionsGiftSyncTooltip": {
+    "message": "This will sync your gift data, including captain's log records",
+    "description": "Gift sync tooltip"
+  },
+  "optionsGiftSync": {
+    "message": "Gift Data Sync",
+    "description": "Gift sync option"
+  },
+  "optionsSyncedAt": {
+    "message": "Synced At",
+    "description": "Last sync time label"
+  },
+  "optionsNextSyncTime": {
+    "message": "Next Sync Time",
+    "description": "Next sync time prompt"
+  },
+  "optionsUserManagement": {
+    "message": "Account Management",
+    "description": "User management page title"
+  },
+  "optionsSyncIdle": {
+    "message": "Sync",
+    "description": "Sync button idle state text"
+  },
+  "optionsSyncSyncing": {
+    "message": "Syncing...",
+    "description": "Sync button syncing state text"
+  },
+  "optionsSyncSuccess": {
+    "message": "Success",
+    "description": "Sync button success state text"
+  },
+  "optionsSyncError": {
+    "message": "Failed",
+    "description": "Sync button failed state text"
+  },
+  "optionsLogin2SOMEren": {
+    "message": "Please login to Multipost",
+    "description": "Login to Multipost prompt"
+  },
+  "optionsNotBoundBilibili": {
+    "message": "Not Bound to Bilibili",
+    "description": "Not bound to Bilibili prompt"
+  },
+  "optionsBoundBilibili": {
+    "message": "Bound:",
+    "description": "Bound to Bilibili prompt"
+  },
+  "optionsNotLoggedIn": {
+    "message": "Not Logged In",
+    "description": "Not logged in status text"
+  },
+  "optionsUID": {
+    "message": "UID",
+    "description": "User ID label"
+  },
+  "optionsNotBound": {
+    "message": "Not Bound",
+    "description": "Not bound status text"
+  },
+  "optionsWaitingForNextSync": {
+    "message": "Waiting for next sync",
+    "description": "Text prompt for waiting for next sync"
+  },
+  "optionsSyncPaused": {
+    "message": "Sync paused",
+    "description": "Text prompt for sync paused"
+  },
+  "optionsGuardListSyncTooltip": {
+    "message": "This will sync your current guard list",
+    "description": "Tooltip text for guard list sync"
+  },
+  "optionsGuardListSync": {
+    "message": "Guard List Sync",
+    "description": "Guard list sync option"
+  },
+  "optionsDanmuTokenSyncTooltip": {
+    "message": "This will sync your danmu identity information",
+    "description": "Tooltip text for danmu token sync"
+  },
+  "optionsDanmuTokenSync": {
+    "message": "Danmu Identity Sync",
+    "description": "Danmu token sync option"
+  },
+  "optionsSessionSyncTooltip": {
+    "message": "This will sync your live session data",
+    "description": "Tooltip text for session sync"
+  },
+  "optionsSessionSync": {
+    "message": "Live Session Sync",
+    "description": "Live session sync option"
+  },
+  "optionsSyncPublishDescription": {
+    "message": "Input content once, public to all platform.",
+    "description": "Sync publish page description"
+  },
+  "optionsAutoPublish": {
+    "message": "Auto Publish",
+    "description": "Auto publish switch text"
+  },
+  "optionsEnterVideoTitle": {
+    "message": "Enter Video Title",
+    "description": "Video title input placeholder"
+  },
+  "optionsEnterVideoDescription": {
+    "message": "Enter Video Description",
+    "description": "Video description input placeholder"
+  },
+  "optionsSyncVideo": {
+    "message": "Sync Video",
+    "description": "Sync video button text"
+  },
+  "optionsDashboard": {
+    "message": "Dashboard"
+  },
+  "dashboardSyncPublic": {
+    "message": "Sync Public"
+  },
+  "optionsSyncPublishTitle": {
+    "message": "Sync Public"
+  },
+  "optionsEnterUrl": {
+    "message": "Enter URL",
+    "description": "Placeholder for URL input"
+  },
+  "optionsImport": {
+    "message": "Import",
+    "description": "Import button text"
+  },
+  "optionsEnterPostTitle": {
+    "message": "Enter Post Title",
+    "description": "Placeholder for post title input"
+  },
+  "optionsEnterPostContent": {
+    "message": "Enter Post Content",
+    "description": "Placeholder for post content input"
+  },
+  "optionsSyncPost": {
+    "message": "Sync Post",
+    "description": "Sync post button text"
+  },
+  "optionsImportedContent": {
+    "message": "Content"
+  },
+  "options2SOMErenHomepage": {
+    "message": "Multipost Homepage",
+    "description": "Multipost homepage button text in options page"
+  },
+  "sidepanelTabsManagerTitle": {
+    "message": "Tabs Manager",
+    "description": "Title for the Tabs Manager in the side panel"
+  },
+  "sidepanelUntitledGroup": {
+    "message": "Untitled Group $1",
+    "description": "Title for an untitled group in the Tabs Manager"
+  },
+  "sidepanelReloadTab": {
+    "message": "Reload tab",
+    "description": "Aria label for the reload tab button"
+  },
+  "sidepanelCloseTab": {
+    "message": "Close tab",
+    "description": "Aria label for the close tab button"
+  },
+  "optionsAtLeastOneImage": {
+    "message": "Select at least one image"
+  },
+  "sidepanelTabsManager": {
+    "message": "Tabs Manager",
+    "description": "Title for the Tabs Manager tab in the side panel"
+  },
+  "sidepanelContentManager": {
+    "message": "Note Collection",
+    "description": "Title for the Content Manager tab in the side panel"
+  },
+  "sidepanelTabsAriaLabel": {
+    "message": "Side Panel Features",
+    "description": "Aria label for the side panel tabs"
+  },
+  "contentManagerTitle": {
+    "message": "Content Manager",
+    "description": "Title for the Content Manager section"
+  },
+  "sidepanelNoTabsMessage": {
+    "message": "You haven't created any sync tasks yet.",
+    "description": "Message displayed when no sync tasks are created"
+  },
+  "sidepanelCreateNewTabButton": {
+    "message": "Create New Sync Task",
+    "description": "Text for the button to create a new sync task"
+  },
+  "selectCollectionLabel": {
+    "message": "Select Collection",
+    "description": "Label for the collection selection dropdown"
+  },
+  "selectCollectionPlaceholder": {
+    "message": "Choose a collection",
+    "description": "Placeholder for the collection selection dropdown"
+  },
+  "addCollectionButtonLabel": {
+    "message": "Add new collection",
+    "description": "Aria label for the add collection button"
+  },
+  "addNewCollectionTitle": {
+    "message": "Add New Collection",
+    "description": "Title for the add new collection modal"
+  },
+  "collectionNameLabel": {
+    "message": "Collection Name",
+    "description": "Label for the collection name input"
+  },
+  "collectionNamePlaceholder": {
+    "message": "Enter collection name",
+    "description": "Placeholder for the collection name input"
+  },
+  "cancelButton": {
+    "message": "Cancel",
+    "description": "Text for the cancel button"
+  },
+  "addButton": {
+    "message": "Add",
+    "description": "Text for the add button"
+  },
+  "defaultCollectionTitle": {
+    "message": "Default Collection",
+    "description": "Title for the default collection"
+  },
+  "workCollectionTitle": {
+    "message": "Work Notes",
+    "description": "Title for the work collection"
+  },
+  "sidepanelCollectionSelectLabel": {
+    "message": "Select Collection",
+    "description": "Label for the collection selection dropdown"
+  },
+  "sidepanelCollectionSelectPlaceholder": {
+    "message": "Choose a collection",
+    "description": "Placeholder for the collection selection dropdown"
+  },
+  "sidepanelCollectionAddButtonLabel": {
+    "message": "Add new collection",
+    "description": "Aria label for the add collection button"
+  },
+  "sidepanelCollectionAddNewTitle": {
+    "message": "Add New Collection",
+    "description": "Title for the add new collection modal"
+  },
+  "sidepanelCollectionNameLabel": {
+    "message": "Collection Name",
+    "description": "Label for the collection name input"
+  },
+  "sidepanelCollectionNamePlaceholder": {
+    "message": "Enter collection name",
+    "description": "Placeholder for the collection name input"
+  },
+  "sidepanelCollectionCancelButton": {
+    "message": "Cancel",
+    "description": "Text for the cancel button"
+  },
+  "sidepanelCollectionAddButton": {
+    "message": "Add",
+    "description": "Text for the add button"
+  },
+  "sidepanelCollectionDefaultTitle": {
+    "message": "Default Collection",
+    "description": "Title for the default collection"
+  },
+  "sidepanelCollectionWorkTitle": {
+    "message": "Work Notes",
+    "description": "Title for the work collection"
+  },
+  "sidepanelCollectionEmpty": {
+    "message": "Click to create Collection"
+  },
+  "sidepanelCollectionItemsTitle": {
+    "message": "Collection Items",
+    "description": "Title for the collection items section"
+  },
+  "sidepanelCollectionItemDeleteButton": {
+    "message": "Delete item",
+    "description": "Aria label for the delete item button"
+  },
+  "sidepanelCollectionItemsEmpty": {
+    "message": "No items in this collection",
+    "description": "Message displayed when the collection is empty"
+  },
+  "dashboardSendBiliPrivateMsg": {
+    "message": "Send Bilibili Private Message"
+  }
+}

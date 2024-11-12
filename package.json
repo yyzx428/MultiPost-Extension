@@ -1,0 +1,75 @@
+{
+  "name": "__MSG_extensionName__",
+  "displayName": "__MSG_extensionDisplayName__",
+  "version": "0.0.1",
+  "description": "__MSG_extensionDescription__",
+  "author": "leaperone",
+  "scripts": {
+    "dev": "plasmo dev",
+    "build": "plasmo build --env=.env.build",
+    "package": "plasmo package",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "lint:staged": "lint-staged",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^0.0.66",
+    "@mozilla/readability": "^0.5.0",
+    "@nextui-org/react": "^2.0.0",
+    "@nextui-org/theme": "^2.1.17",
+    "@plasmohq/storage": "^1.11.0",
+    "ai": "^3.4.9",
+    "dexie": "^4.0.8",
+    "file-saver": "^2.0.5",
+    "framer-motion": "^10.16.16",
+    "lucide-react": "^0.447.0",
+    "plasmo": "0.89.4",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-viewer": "^3.2.2",
+    "tailwindcss": "3.3.5",
+    "uuid": "^10.0.0",
+    "video-react": "^0.16.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.5.0",
+    "@commitlint/config-conventional": "^19.5.0",
+    "@ianvs/prettier-plugin-sort-imports": "4.1.1",
+    "@types/chrome": "0.0.251",
+    "@types/node": "20.9.0",
+    "@types/react": "18.2.37",
+    "@types/react-dom": "18.2.15",
+    "@typescript-eslint/eslint-plugin": "^8.8.1",
+    "@typescript-eslint/parser": "^8.8.1",
+    "eslint": "^8",
+    "eslint-plugin-tailwindcss": "^3.17.4",
+    "husky": "^9.1.6",
+    "lint-staged": "^15.2.10",
+    "postcss": "8.4.31",
+    "prettier": "3.0.3",
+    "stylelint": "^16.9.0",
+    "stylelint-config-standard": "^36.0.1",
+    "typescript": "5.2.2"
+  },
+  "manifest": {
+    "default_locale": "zh_CN",
+    "host_permissions": [
+      "https://*/*",
+      "http://127.0.0.1/*",
+      "http://localhost/*"
+    ],
+    "permissions": [
+      "cookies",
+      "activeTab",
+      "tabs",
+      "background",
+      "declarativeNetRequest",
+      "scripting",
+      "tabGroups",
+      "sidePanel"
+    ]
+  },
+  "packageManager": "pnpm@9.0.2+sha1.2a34aeb80bf8e8435815d14f620ec4ba0eff1604"
+}

@@ -1,0 +1,418 @@
+{
+  "extensionName": {
+    "message": "Multipost",
+    "description": "Multipost Extension"
+  },
+  "extensionDisplayName": {
+    "message": "Multipost",
+    "description": "Multipost Extension"
+  },
+  "extensionDescription": {
+    "message": "Multipost 是一个帮助你在多个平台同步发布内容的工具。",
+    "description": "Multipost 是一个帮助你在多个平台同步发布内容的工具。"
+  },
+  "popupSettingsTooltip": {
+    "message": "设置",
+    "description": "设置按钮的提示文本"
+  },
+  "popupSyncPublicTooltip": {
+    "message": "同步发布",
+    "description": "同步发布按钮的提示文本"
+  },
+  "popupBubbleboxTooltip": {
+    "message": "泡泡树洞",
+    "description": "泡泡树洞按钮的提示文本"
+  },
+  "popupGiftTooltip": {
+    "message": "礼兮",
+    "description": "礼兮按钮的提示文本"
+  },
+  "popupDefaultNickname": {
+    "message": "未设置昵称",
+    "description": "默认昵称文本"
+  },
+  "optionsTitle": {
+    "message": "Multipost 扩展",
+    "description": "选项页面标题"
+  },
+  "optionsViewDocs": {
+    "message": "查看文档",
+    "description": "查看文档按钮文本"
+  },
+  "optionsAccountManagement": {
+    "message": "账号管理",
+    "description": "账号管理选项卡标题"
+  },
+  "optionsDataSync": {
+    "message": "数据同步",
+    "description": "数据同步选项卡标题"
+  },
+  "optionsRunningLogs": {
+    "message": "运行日志",
+    "description": "运行日志选项卡标题"
+  },
+  "optionsDynamicTab": {
+    "message": "动态",
+    "description": "动态选项卡标题"
+  },
+  "optionsEnterDynamicTitle": {
+    "message": "输入动态标题",
+    "description": "动态标题输入框占位符"
+  },
+  "optionsEnterDynamicContent": {
+    "message": "输入动态内容",
+    "description": "动态内容输入框占位符"
+  },
+  "optionsSelectPublishPlatforms": {
+    "message": "选择发布平台：",
+    "description": "选择发布平台提示"
+  },
+  "optionsSyncDynamic": {
+    "message": "同步动态",
+    "description": "同步动态按钮文本"
+  },
+  "optionsPostTab": {
+    "message": "文章",
+    "description": "文章选项卡标题"
+  },
+  "optionsVideoTab": {
+    "message": "视频",
+    "description": "视频选项卡标题"
+  },
+  "optionsClearLogs": {
+    "message": "清除日志",
+    "description": "清除日志按钮文本"
+  },
+  "optionsFilterLevel": {
+    "message": "筛选级别",
+    "description": "日志级别筛选器占位符"
+  },
+  "optionsAllLevels": {
+    "message": "全部级别",
+    "description": "全部日志级别选项"
+  },
+  "optionsInfo": {
+    "message": "信息",
+    "description": "信息级别日志"
+  },
+  "optionsWarning": {
+    "message": "警告",
+    "description": "警告级别日志"
+  },
+  "optionsError": {
+    "message": "错误",
+    "description": "错误级别日志"
+  },
+  "optionsFilterSource": {
+    "message": "筛选来源",
+    "description": "日志来源筛选器占位符"
+  },
+  "optionsAllSources": {
+    "message": "全部来源",
+    "description": "全部日志来源选项"
+  },
+  "optionsNoLogs": {
+    "message": "暂无日志",
+    "description": "无日志时显示的文本"
+  },
+  "optionsSyncSettingsTitle": {
+    "message": "同步服务设置与管理",
+    "description": "同步设置页面标题"
+  },
+  "optionsSyncSettingsDescription": {
+    "message": "在这里你可以管理数据的同步内容",
+    "description": "同步设置页面描述"
+  },
+  "optionsGiftSyncTooltip": {
+    "message": "会同步你的礼物数据，包括舰长上舰记录",
+    "description": "礼物同步提示"
+  },
+  "optionsGiftSync": {
+    "message": "礼物数据同步",
+    "description": "礼物同步选项"
+  },
+  "optionsSyncedAt": {
+    "message": "同步于",
+    "description": "上次同步时间标签"
+  },
+  "optionsNextSyncTime": {
+    "message": "下次同步时间",
+    "description": "下次同步时间提示"
+  },
+  "optionsUserManagement": {
+    "message": "账号管理",
+    "description": "用户管理页面标题"
+  },
+  "optionsSyncIdle": {
+    "message": "同步",
+    "description": "同步按钮空闲状态文本"
+  },
+  "optionsSyncSyncing": {
+    "message": "同步中...",
+    "description": "同步按钮同步中状态文本"
+  },
+  "optionsSyncSuccess": {
+    "message": "成功",
+    "description": "同步按钮成功状态文本"
+  },
+  "optionsSyncError": {
+    "message": "失败",
+    "description": "同步按钮失败状态文本"
+  },
+  "optionsLogin2SOMEren": {
+    "message": "请登录 Multipost",
+    "description": "登录 Multipost 提示"
+  },
+  "optionsNotBoundBilibili": {
+    "message": "未绑定 B 站账号",
+    "description": "未绑定 B 站账号提示"
+  },
+  "optionsBoundBilibili": {
+    "message": "已绑定：",
+    "description": "已绑定 B 站账号提示"
+  },
+  "optionsNotLoggedIn": {
+    "message": "未登录",
+    "description": "未登录状态文本"
+  },
+  "optionsUID": {
+    "message": "UID",
+    "description": "用户 ID 标签"
+  },
+  "optionsNotBound": {
+    "message": "未绑定",
+    "description": "未绑定状态文本"
+  },
+  "optionsWaitingForNextSync": {
+    "message": "等待下次同步",
+    "description": "等待下次同步的提示文本"
+  },
+  "optionsSyncPaused": {
+    "message": "同步已暂停",
+    "description": "同步暂停的提示文本"
+  },
+  "optionsGuardListSyncTooltip": {
+    "message": "会同步你的当前舰长列表",
+    "description": "舰长列表同步的提示文本"
+  },
+  "optionsGuardListSync": {
+    "message": "在舰舰长同步",
+    "description": "舰长列表同步选项"
+  },
+  "optionsDanmuTokenSyncTooltip": {
+    "message": "会同步你的弹幕身份信息",
+    "description": "弹幕身份同步的提示文本"
+  },
+  "optionsDanmuTokenSync": {
+    "message": "弹幕身份同步",
+    "description": "弹幕身份同步选项"
+  },
+  "optionsSessionSyncTooltip": {
+    "message": "会同步你的直播场次数据",
+    "description": "直播场次同步的提示文本"
+  },
+  "optionsSessionSync": {
+    "message": "直播场次同步",
+    "description": "直播场次同步选项"
+  },
+  "optionsAutoPublish": {
+    "message": "自动发布",
+    "description": "自动发布开关文本"
+  },
+  "optionsSyncPublishDescription": {
+    "message": "一次输入，在多个平台同步发布",
+    "description": "同步发布页面描述"
+  },
+  "optionsEnterVideoTitle": {
+    "message": "输入视频标题",
+    "description": "视频标题输入框占位符"
+  },
+  "optionsEnterVideoDescription": {
+    "message": "输入视频描述",
+    "description": "视频描述输入框占位符"
+  },
+  "optionsSyncVideo": {
+    "message": "同步视频",
+    "description": "同步视频按钮文本"
+  },
+  "optionsDashboard": {
+    "message": "控制台"
+  },
+  "dashboardSyncPublic": {
+    "message": "同步发布"
+  },
+  "syncPublicPageTitle": {
+    "message": "同步发布"
+  },
+  "optionsSyncPublishTitle": {
+    "message": "同步发布"
+  },
+  "optionsEnterUrl": {
+    "message": "输入URL",
+    "description": "URL输入框占位符"
+  },
+  "optionsImport": {
+    "message": "导入",
+    "description": "导入按钮文本"
+  },
+  "optionsEnterPostTitle": {
+    "message": "输入文章标题",
+    "description": "文章标题输入框占位符"
+  },
+  "optionsEnterPostContent": {
+    "message": "输入文章内容",
+    "description": "文章内容输入框占位符"
+  },
+  "optionsSyncPost": {
+    "message": "同步文章",
+    "description": "同步文章按钮文本"
+  },
+  "optionsImportedContent": {
+    "message": "内容"
+  },
+  "options2SOMErenHomepage": {
+    "message": "Multipost 首页",
+    "description": "选项页面中 Multipost 首页按钮文本"
+  },
+  "sidepanelTabsManagerTitle": {
+    "message": "同步管理",
+    "description": "侧边栏标签管理器的标题"
+  },
+  "sidepanelUntitledGroup": {
+    "message": "未命名分组 $1",
+    "description": "标签管理器中未命名分组的标题"
+  },
+  "sidepanelReloadTab": {
+    "message": "重新加载标签",
+    "description": "重新加载标签按钮的 aria 标签"
+  },
+  "sidepanelCloseTab": {
+    "message": "关闭标签",
+    "description": "关闭标签按钮的 aria 标签"
+  },
+  "optionsAtLeastOneImage": {
+    "message": "请选择至少一张图片"
+  },
+  "sidepanelTabsManager": {
+    "message": "标签管理",
+    "description": "侧边栏标签管理器选项卡的标题"
+  },
+  "sidepanelContentManager": {
+    "message": "笔记收藏",
+    "description": "侧边栏内容管理器选项卡的标题"
+  },
+  "sidepanelTabsAriaLabel": {
+    "message": "侧边栏功能",
+    "description": "侧边栏选项卡的无障碍标签"
+  },
+  "contentManagerTitle": {
+    "message": "内容管理",
+    "description": "内容管理部分的标题"
+  },
+  "sidepanelNoTabsMessage": {
+    "message": "你还没有新建同步任务",
+    "description": "当没有同步任务时显示的消息"
+  },
+  "sidepanelCreateNewTabButton": {
+    "message": "新建同步任务",
+    "description": "创建新同步任务按钮的文本"
+  },
+  "selectCollectionLabel": {
+    "message": "选择收藏夹",
+    "description": "收藏夹选择下拉框的标签"
+  },
+  "selectCollectionPlaceholder": {
+    "message": "选择一个收藏夹",
+    "description": "收藏夹选择下拉框的占位符"
+  },
+  "addCollectionButtonLabel": {
+    "message": "添加新收藏夹",
+    "description": "添加收藏夹按钮的无障碍标签"
+  },
+  "addNewCollectionTitle": {
+    "message": "添加新收藏夹",
+    "description": "添加新收藏夹模态框的标题"
+  },
+  "collectionNameLabel": {
+    "message": "收藏夹名称",
+    "description": "收藏夹名称输入框的标签"
+  },
+  "collectionNamePlaceholder": {
+    "message": "输入收藏夹名称",
+    "description": "收藏夹名称输入框的占位"
+  },
+  "cancelButton": {
+    "message": "取消",
+    "description": "取消按钮的文本"
+  },
+  "addButton": {
+    "message": "添加",
+    "description": "添加按钮的文本"
+  },
+  "defaultCollectionTitle": {
+    "message": "默认收藏夹",
+    "description": "默认收藏夹的标题"
+  },
+  "workCollectionTitle": {
+    "message": "工作笔记",
+    "description": "工作收藏夹的标题"
+  },
+  "sidepanelCollectionSelectLabel": {
+    "message": "选择收藏夹",
+    "description": "收藏夹选择下拉框的标签"
+  },
+  "sidepanelCollectionSelectPlaceholder": {
+    "message": "选择一个收藏夹",
+    "description": "收藏夹选择下拉框的占位符"
+  },
+  "sidepanelCollectionAddButtonLabel": {
+    "message": "添加新收藏夹",
+    "description": "添加收藏夹按钮的无障碍标签"
+  },
+  "sidepanelCollectionAddNewTitle": {
+    "message": "添加新收藏夹",
+    "description": "添加新收藏夹模态框的标题"
+  },
+  "sidepanelCollectionNameLabel": {
+    "message": "收藏夹名称",
+    "description": "收藏夹名称输入框的标签"
+  },
+  "sidepanelCollectionNamePlaceholder": {
+    "message": "输入收藏夹名称",
+    "description": "收藏夹名称输入框的占位符"
+  },
+  "sidepanelCollectionCancelButton": {
+    "message": "取消",
+    "description": "取消按钮的文本"
+  },
+  "sidepanelCollectionAddButton": {
+    "message": "添加",
+    "description": "添加按钮的文本"
+  },
+  "sidepanelCollectionDefaultTitle": {
+    "message": "默认收藏夹",
+    "description": "默认收藏夹的标题"
+  },
+  "sidepanelCollectionWorkTitle": {
+    "message": "工作笔记",
+    "description": "工作收藏夹的标题"
+  },
+  "sidepanelCollectionEmpty": {
+    "message": "新建收藏夹以继续 ----->"
+  },
+  "sidepanelCollectionItemsTitle": {
+    "message": "收藏项目",
+    "description": "收藏项目列表的标题"
+  },
+  "sidepanelCollectionItemDeleteButton": {
+    "message": "删除项目",
+    "description": "删除项目按钮的无障碍标签"
+  },
+  "sidepanelCollectionItemsEmpty": {
+    "message": "该收藏夹暂无项目",
+    "description": "收藏夹为空时显示的消息"
+  },
+  "dashboardSendBiliPrivateMsg": {
+    "message": "发送 B 站私信"
+  }
+}
