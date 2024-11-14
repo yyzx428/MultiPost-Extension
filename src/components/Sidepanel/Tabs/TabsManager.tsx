@@ -110,7 +110,7 @@ function TabsManager() {
           <p className="mb-4 text-lg">{chrome.i18n.getMessage('sidepanelNoTabsMessage')}</p>
           <Button
             color="primary"
-            onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL('tabs/sync-public.html') })}>
+            onClick={() => chrome.runtime.openOptionsPage()}>
             {chrome.i18n.getMessage('sidepanelCreateNewTabButton')}
           </Button>
         </div>

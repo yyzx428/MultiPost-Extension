@@ -76,16 +76,6 @@ function SidePanel() {
             }>
             <TabsManager />
           </Tab>
-          <Tab
-            key="collection"
-            title={
-              <div className="flex gap-2 items-center">
-                <ListIcon />
-                <span>{chrome.i18n.getMessage('sidepanelContentManager')}</span>
-              </div>
-            }>
-            <CollectionManager />
-          </Tab>
         </Tabs>
       </div>
     </NextUIProvider>

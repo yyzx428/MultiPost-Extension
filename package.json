@@ -69,6 +69,16 @@
       "scripting",
       "tabGroups",
       "sidePanel"
+    ],
+    "web_accessible_resources": [
+      {
+        "resources": [
+          "assets/icon.png"
+        ],
+        "matches": [
+          "https://www.plasmo.com/*"
+        ]
+      }
     ]
   },
   "packageManager": "pnpm@9.0.2+sha1.2a34aeb80bf8e8435815d14f620ec4ba0eff1604"

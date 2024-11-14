@@ -133,14 +133,14 @@ const Options = () => {
               title={chrome.i18n.getMessage('optionsDynamicTab')}>
               <DynamicTab funcPublish={funcPublish} />
             </Tab>
-            <Tab
+            {/* <Tab
               key="post"
               title={chrome.i18n.getMessage('optionsPostTab')}>
               <PostTab
                 funcPublish={funcPublish}
                 funcScraper={funcScraper}
-              />
-            </Tab>
+              /> */}
+            {/* </Tab> */}
             <Tab
               key="video"
               title={chrome.i18n.getMessage('optionsVideoTab')}>
