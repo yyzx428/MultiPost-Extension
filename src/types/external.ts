@@ -7,5 +7,7 @@ export type ExtensionExternalRequest<T> = {
 export interface ExtensionExternalResponse<T> {
   traceId: string;
   action: string;
+  code: number;
+  message: string;
   data: T;
 }

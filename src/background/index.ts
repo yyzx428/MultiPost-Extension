@@ -62,6 +62,10 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
       console.error('没有指定有效的平台');
     }
   }
+  if (request.type === 'MULTIPOST_EXTENSION_OPEN_OPTIONS') {
+    chrome.runtime.openOptionsPage();
+    sendResponse('success');
+  }
 };
 // Message Handler || 消息处理器 || END
 
