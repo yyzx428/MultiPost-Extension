@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export {};
 
-import { tabsManagerHandleTabRemoved, tabsManagerHandleTabUpdated, tabsManagerMessageHandler } from './services/tabs';
+import { addTabsManagerMessages, tabsManagerHandleTabRemoved, tabsManagerHandleTabUpdated, tabsManagerMessageHandler } from './services/tabs';
 import QuantumEntanglementKeepAlive from '../utils/keep-alive';
 import { collectionMessageHandler } from './services/collection/collection';
+import { createTabsForPlatforms, injectScriptsToTabs, type SyncData } from '~contents/sync/common';
 
 chrome.runtime.onInstalled.addListener((object) => {
   if (object.reason === chrome.runtime.OnInstalledReason.INSTALL) {
@@ -30,7 +31,36 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // Message Handler || 消息处理器 || START
 const defaultMessageHandler = (request, sender, sendResponse) => {
   if (request.type === 'MUTLIPOST_EXTENSION_CHECK_SERVICE_STATUS') {
-    sendResponse('success');
+    sendResponse({ extensionId: chrome.runtime.id });
+  }
+  if (request.type === 'MUTLIPOST_EXTENSION_POST_DYNAMIC') {
+    const data = request.data as SyncData;
+    if (Array.isArray(data.platforms) && data.platforms.length > 0) {
+      createTabsForPlatforms(data)
+        .then(async (tabs) => {
+          injectScriptsToTabs(tabs, data);
+
+          addTabsManagerMessages({
+            syncData: data,
+            tabs: tabs.map((t: [chrome.tabs.Tab, string]) => ({
+              tab: t[0],
+              platform: t[1],
+            })),
+          });
+
+          for (const [tab] of tabs) {
+            if (tab.id) {
+              await chrome.tabs.update(tab.id, { active: true });
+              await new Promise((resolve) => setTimeout(resolve, 2000));
+            }
+          }
+        })
+        .catch((error) => {
+          console.error('创建标签页或分组时出错:', error);
+        });
+    } else {
+      console.error('没有指定有效的平台');
+    }
   }
 };
 // Message Handler || 消息处理器 || END
