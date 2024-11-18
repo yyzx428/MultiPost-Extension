@@ -1,7 +1,7 @@
 {
   "name": "__MSG_extensionName__",
   "displayName": "__MSG_extensionDisplayName__",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "__MSG_extensionDescription__",
   "author": "leaperone",
   "scripts": {
@@ -61,11 +61,9 @@
       "http://localhost/*"
     ],
     "permissions": [
-      "cookies",
       "activeTab",
       "tabs",
       "background",
-      "declarativeNetRequest",
       "scripting",
       "tabGroups",
       "sidePanel"
