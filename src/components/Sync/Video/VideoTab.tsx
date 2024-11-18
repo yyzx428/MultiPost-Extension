@@ -4,7 +4,7 @@ import { VideoIcon, XIcon } from 'lucide-react';
 import { Player } from 'video-react';
 import 'video-react/dist/video-react.css';
 // import ReactPlayer from 'react-player';
-import type { SyncData, FileData } from '~contents/sync/common';
+import type { SyncData, FileData } from '~sync/common';
 import SyncBilibiliVideo from './BilibiliVideo';
 import SyncDouyinVideo from './DouyinVideo';
 import SyncYouTubeVideo from './YoutubeVideo';

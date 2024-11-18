@@ -1,4 +1,4 @@
-import { getUrl, injectScriptsToTabs, type SyncData } from '~contents/sync/common';
+import { getUrl, injectScriptsToTabs, type SyncData } from '~sync/common';
 
 // Tab Manager || 标签页管理 || START
 export interface TabManagerMessage {

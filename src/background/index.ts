@@ -1,10 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export {};
 
-import { addTabsManagerMessages, tabsManagerHandleTabRemoved, tabsManagerHandleTabUpdated, tabsManagerMessageHandler } from './services/tabs';
+import {
+  addTabsManagerMessages,
+  tabsManagerHandleTabRemoved,
+  tabsManagerHandleTabUpdated,
+  tabsManagerMessageHandler,
+} from './services/tabs';
 import QuantumEntanglementKeepAlive from '../utils/keep-alive';
 import { collectionMessageHandler } from './services/collection/collection';
-import { createTabsForPlatforms, injectScriptsToTabs, type SyncData } from '~contents/sync/common';
+import { createTabsForPlatforms, injectScriptsToTabs, type SyncData } from '~sync/common';
 
 chrome.runtime.onInstalled.addListener((object) => {
   if (object.reason === chrome.runtime.OnInstalledReason.INSTALL) {

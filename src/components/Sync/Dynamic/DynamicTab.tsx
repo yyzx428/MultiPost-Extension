@@ -12,8 +12,8 @@ import SyncWeiboDynamic from './WeiboDynamic';
 import SyncXueqiuDynamic from './XueqiuDynamic';
 import SyncZhihuDynamic from './ZhihuDynamic';
 import SyncDouyinImage from './DouyinImage';
-import type { FileData, SyncData } from '~contents/sync/common';
-import { PLATFORM_NEED_IMAGE } from '~contents/sync/common';
+import type { FileData, SyncData } from '~sync/common';
+import { PLATFORM_NEED_IMAGE } from '~sync/common';
 import SyncInstagramImage from './InstagramImage';
 
 interface DynamicTabProps {
