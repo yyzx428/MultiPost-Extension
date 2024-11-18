@@ -11,34 +11,22 @@ window.addEventListener('message', async (event) => {
   console.debug(event);
   const request: ExtensionExternalRequest<unknown> = event.data;
 
-  switch (request.action) {
-    case 'MUTLIPOST_EXTENSION_REQUEST_CHECK_SERVICE_STATUS':
-      chrome.runtime.sendMessage({ type: 'MUTLIPOST_EXTENSION_CHECK_SERVICE_STATUS' }).then((response) => {
-        event.source.postMessage(successResponse(request, { extensionId: response.extensionId }));
-      });
-      break;
-    
-    case 'MUTLIPOST_EXTENSION_REQUEST_POST_DYNAMIC':
-      chrome.runtime.sendMessage({
-        type: 'MUTLIPOST_EXTENSION_POST_DYNAMIC',
-        data: request.data,
-      }).then((response) => {
-        event.source.postMessage(successResponse(request, response));
-      });
-      break;
-
-    case 'MULTIPOST_EXTENSION_REQUEST_OPEN_OPTIONS':
-      chrome.runtime.sendMessage({
-        type: 'MULTIPOST_EXTENSION_OPEN_OPTIONS',
-      }).then((response) => {
-        event.source.postMessage(successResponse(request, response));
-      });
-      break;
+  if (request.type !== 'request') {
+    return;
   }
+
+  defaultHandler(request, event);
 });
+
+function defaultHandler<T>(request: ExtensionExternalRequest<T>, event: MessageEvent) {
+  chrome.runtime.sendMessage(request).then((response) => {
+    event.source.postMessage(successResponse(request, response));
+  });
+}
 
 function successResponse<T>(request: ExtensionExternalRequest<T>, data: T) {
   return {
+    type: 'response',
     traceId: request.traceId,
     action: request.action,
     code: 0,

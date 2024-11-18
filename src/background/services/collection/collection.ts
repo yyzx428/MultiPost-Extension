@@ -1,7 +1,6 @@
 import { CollectionService } from './store';
 
 export const collectionMessageHandler = (request, sender, sendResponse) => {
-  console.log('collectionMessageHandler', request);
   switch (request.type) {
     case 'MUTLIPOST_EXTENSION_REQUEST_ADD_ITEM_TO_CURRENT_COLLECTION':
       console.log(request);

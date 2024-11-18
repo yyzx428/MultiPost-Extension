@@ -30,10 +30,10 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 
 // Message Handler || 消息处理器 || START
 const defaultMessageHandler = (request, sender, sendResponse) => {
-  if (request.type === 'MUTLIPOST_EXTENSION_CHECK_SERVICE_STATUS') {
+  if (request.action === 'MUTLIPOST_EXTENSION_CHECK_SERVICE_STATUS') {
     sendResponse({ extensionId: chrome.runtime.id });
   }
-  if (request.type === 'MUTLIPOST_EXTENSION_POST_DYNAMIC') {
+  if (request.action === 'MUTLIPOST_EXTENSION_POST_DYNAMIC') {
     const data = request.data as SyncData;
     if (Array.isArray(data.platforms) && data.platforms.length > 0) {
       createTabsForPlatforms(data)
@@ -62,9 +62,9 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
       console.error('没有指定有效的平台');
     }
   }
-  if (request.type === 'MULTIPOST_EXTENSION_OPEN_OPTIONS') {
+  if (request.action === 'MUTLIPOST_EXTENSION_OPEN_OPTIONS') {
     chrome.runtime.openOptionsPage();
-    sendResponse('success');
+    sendResponse({ extensionId: chrome.runtime.id });
   }
 };
 // Message Handler || 消息处理器 || END
