@@ -46,15 +46,11 @@ export interface VideoData {
 export interface PlatformInfo {
   type: 'DYNAMIC' | 'VIDEO';
   name: string;
-
   homeUrl: string;
-  faviconUrl: string;
-  cnName: string;
-  enName: string;
-
+  faviconUrl?: string;
+  platformName: string;
   username?: string;
   userAvatarUrl?: string;
-
   injectUrl: string;
   injectFunction: (data: SyncData) => Promise<void>;
 }
@@ -88,14 +84,13 @@ export type Platform =
   | 'VIDEO_YOUTUBE'
   | 'VIDEO_REDNOTE';
 
-const infoMap: Record<Platform, PlatformInfo> = {
+export const infoMap: Record<Platform, PlatformInfo> = {
   DYNAMIC_X: {
     type: 'DYNAMIC',
     name: 'DYNAMIC_X',
     homeUrl: 'https://x.com/home',
     faviconUrl: 'https://x.com/favicon.ico',
-    cnName: 'X',
-    enName: 'X',
+    platformName: chrome.i18n.getMessage('platformX'),
     injectUrl: 'https://x.com/home',
     injectFunction: DynamicX,
   },
@@ -104,8 +99,7 @@ const infoMap: Record<Platform, PlatformInfo> = {
     name: 'DYNAMIC_BILIBILI',
     homeUrl: 'https://t.bilibili.com',
     faviconUrl: 'https://static.hdslb.com/images/favicon.ico',
-    cnName: '哔哩哔哩',
-    enName: 'Bilibili',
+    platformName: chrome.i18n.getMessage('platformBilibili'),
     injectUrl: 'https://t.bilibili.com',
     injectFunction: DynamicBilibili,
   },
@@ -113,9 +107,8 @@ const infoMap: Record<Platform, PlatformInfo> = {
     type: 'DYNAMIC',
     name: 'DYNAMIC_REDNOTE',
     homeUrl: 'https://creator.xiaohongshu.com/publish/publish',
-    faviconUrl: 'https://creator.xiaohongshu.com/favicon.ico',
-    cnName: '小红书',
-    enName: 'Rednote',
+    // faviconUrl: 'https://creator.xiaohongshu.com/favicon.ico',
+    platformName: chrome.i18n.getMessage('platformRednote'),
     injectUrl: 'https://creator.xiaohongshu.com/publish/publish',
     injectFunction: DynamicRednoteImage,
   },
@@ -124,8 +117,7 @@ const infoMap: Record<Platform, PlatformInfo> = {
     name: 'DYNAMIC_WEIBO',
     homeUrl: 'https://weibo.com',
     faviconUrl: 'https://weibo.com/favicon.ico',
-    cnName: '微博',
-    enName: 'Weibo',
+    platformName: chrome.i18n.getMessage('platformWeibo'),
     injectUrl: 'https://weibo.com',
     injectFunction: DynamicWeibo,
   },
@@ -134,8 +126,7 @@ const infoMap: Record<Platform, PlatformInfo> = {
     name: 'DYNAMIC_XUEQIU',
     homeUrl: 'https://xueqiu.com',
     faviconUrl: 'https://xueqiu.com/favicon.ico',
-    cnName: '雪球',
-    enName: 'Xueqiu',
+    platformName: chrome.i18n.getMessage('platformXueqiu'),
     injectUrl: 'https://xueqiu.com',
     injectFunction: DynamicXueqiu,
   },
@@ -144,8 +135,7 @@ const infoMap: Record<Platform, PlatformInfo> = {
     name: 'DYNAMIC_ZHIHU',
     homeUrl: 'https://www.zhihu.com',
     faviconUrl: 'https://www.zhihu.com/favicon.ico',
-    cnName: '知乎',
-    enName: 'Zhihu',
+    platformName: chrome.i18n.getMessage('platformZhihu'),
     injectUrl: 'https://www.zhihu.com',
     injectFunction: DynamicZhihu,
   },
@@ -154,8 +144,7 @@ const infoMap: Record<Platform, PlatformInfo> = {
     name: 'DYNAMIC_DOUYIN_IMAGE',
     homeUrl: 'https://creator.douyin.com/creator-micro/content/upload?default-tab=3',
     faviconUrl: 'https://lf1-cdn-tos.bytegoofy.com/goofy/ies/douyin_web/public/favicon.ico',
-    cnName: '抖音',
-    enName: 'Douyin',
+    platformName: chrome.i18n.getMessage('platformDouyin'),
     injectUrl: 'https://creator.douyin.com/creator-micro/content/upload?default-tab=3',
     injectFunction: DynamicDouyinImage,
   },
@@ -163,9 +152,8 @@ const infoMap: Record<Platform, PlatformInfo> = {
     type: 'DYNAMIC',
     name: 'DYNAMIC_INSTAGRAM_IMAGE',
     homeUrl: 'https://www.instagram.com/',
-    faviconUrl: 'https://www.instagram.com/favicon.ico',
-    cnName: 'Instagram',
-    enName: 'Instagram',
+    // faviconUrl: 'https://www.instagram.com/favicon.ico',
+    platformName: chrome.i18n.getMessage('platformInstagram'),
     injectUrl: 'https://www.instagram.com/',
     injectFunction: DynamicInstagramImage,
   },
@@ -174,8 +162,7 @@ const infoMap: Record<Platform, PlatformInfo> = {
     name: 'VIDEO_BILIBILI',
     homeUrl: 'https://member.bilibili.com/platform/upload/video/frame',
     faviconUrl: 'https://static.hdslb.com/images/favicon.ico',
-    cnName: '哔哩哔哩',
-    enName: 'Bilibili',
+    platformName: chrome.i18n.getMessage('platformBilibili'),
     injectUrl: 'https://member.bilibili.com/platform/upload/video/frame',
     injectFunction: VideoBilibili,
   },
@@ -184,8 +171,7 @@ const infoMap: Record<Platform, PlatformInfo> = {
     name: 'VIDEO_DOUYIN',
     homeUrl: 'https://creator.douyin.com/creator-micro/content/upload',
     faviconUrl: 'https://lf1-cdn-tos.bytegoofy.com/goofy/ies/douyin_web/public/favicon.ico',
-    cnName: '抖音',
-    enName: 'Douyin',
+    platformName: chrome.i18n.getMessage('platformDouyin'),
     injectUrl: 'https://creator.douyin.com/creator-micro/content/upload',
     injectFunction: VideoDouyin,
   },
@@ -194,8 +180,7 @@ const infoMap: Record<Platform, PlatformInfo> = {
     name: 'VIDEO_YOUTUBE',
     homeUrl: 'https://studio.youtube.com/',
     faviconUrl: 'https://www.youtube.com/favicon.ico',
-    cnName: 'YouTube',
-    enName: 'YouTube',
+    platformName: chrome.i18n.getMessage('platformYoutube'),
     injectUrl: 'https://studio.youtube.com/',
     injectFunction: VideoYoutube,
   },
@@ -203,9 +188,8 @@ const infoMap: Record<Platform, PlatformInfo> = {
     type: 'VIDEO',
     name: 'VIDEO_REDNOTE',
     homeUrl: 'https://creator.xiaohongshu.com/publish/publish',
-    faviconUrl: 'https://creator.xiaohongshu.com/favicon.ico',
-    cnName: '小红书',
-    enName: 'Rednote',
+    // faviconUrl: 'https://creator.xiaohongshu.com/favicon.ico',
+    platformName: chrome.i18n.getMessage('platformRednote'),
     injectUrl: 'https://creator.xiaohongshu.com/publish/publish',
     injectFunction: VideoRednote,
   },
@@ -213,6 +197,11 @@ const infoMap: Record<Platform, PlatformInfo> = {
 
 export function getDefaultPlatformInfo(platform: string): PlatformInfo | null {
   return infoMap[platform] || null;
+}
+
+export function getPlatformInfos(type?: 'DYNAMIC' | 'VIDEO'): PlatformInfo[] {
+  if (!type) return Object.values(infoMap);
+  return Object.values(infoMap).filter((info) => info.type === type);
 }
 
 // Inject || 注入 || START

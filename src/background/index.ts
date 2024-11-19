@@ -9,7 +9,7 @@ import {
 } from './services/tabs';
 import QuantumEntanglementKeepAlive from '../utils/keep-alive';
 import { collectionMessageHandler } from './services/collection/collection';
-import { createTabsForPlatforms, injectScriptsToTabs, type SyncData } from '~sync/common';
+import { createTabsForPlatforms, getPlatformInfos, injectScriptsToTabs, type SyncData } from '~sync/common';
 
 chrome.runtime.onInstalled.addListener((object) => {
   if (object.reason === chrome.runtime.OnInstalledReason.INSTALL) {
@@ -38,7 +38,7 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
   if (request.action === 'MUTLIPOST_EXTENSION_CHECK_SERVICE_STATUS') {
     sendResponse({ extensionId: chrome.runtime.id });
   }
-  if (request.action === 'MUTLIPOST_EXTENSION_POST_DYNAMIC') {
+  if (request.action === 'MUTLIPOST_EXTENSION_PUBLISH') {
     const data = request.data as SyncData;
     if (Array.isArray(data.platforms) && data.platforms.length > 0) {
       createTabsForPlatforms(data)
@@ -66,6 +66,9 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
     } else {
       console.error('没有指定有效的平台');
     }
+  }
+  if (request.action === 'MUTLIPOST_EXTENSION_PLATFORMS') {
+    sendResponse({ platforms: getPlatformInfos() });
   }
   if (request.action === 'MUTLIPOST_EXTENSION_OPEN_OPTIONS') {
     chrome.runtime.openOptionsPage();
