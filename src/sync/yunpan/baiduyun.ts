@@ -69,11 +69,11 @@ export async function BaiduYunPan(data: SyncData) {
 
     if (files && files.length > 0) {
         // 等待页面加载
-        await waitForElement('a[title="' + paths[0] + '"]', 2000);
+        await waitForElement('td[class="wp-s-pan-table__td"]');
         await new Promise((resolve) => setTimeout(resolve, 2000));
 
         for (const path of paths) {
-            await waitForElement('a[title="' + path + '"]', 2000);
+            await waitForElement('td[class="wp-s-pan-table__td"]');
             let dir = document.querySelector('a[title="' + path + '"]') as HTMLElement;
             if (!dir) {
                 const newDirButton = document.querySelector('button[title="新建文件夹"]') as HTMLElement;
@@ -83,8 +83,9 @@ export async function BaiduYunPan(data: SyncData) {
                 }
 
                 newDirButton.click();
-                newDirButton.dispatchEvent(new Event('click', { bubbles: true }));
 
+                await waitForElement('td[class="wp-s-pan-table__td"]');
+                await new Promise((resolve) => setTimeout(resolve, 2000));
                 const dirNameInputs = document.querySelectorAll('input[class="u-input__inner"]');
                 const dirNameInput = Array.from(dirNameInputs).find(
                     (element: HTMLInputElement) => !element.placeholder?.includes('搜索我的文件'),
@@ -105,7 +106,7 @@ export async function BaiduYunPan(data: SyncData) {
 
                 confirDirButton.click();
                 confirDirButton.dispatchEvent(new Event('click', { bubbles: true }));
-
+                await new Promise((resolve) => setTimeout(resolve, 2000));
                 dir = document.querySelector('a[title="' + path + '"]') as HTMLElement;
             }
 

@@ -110,7 +110,7 @@ export function getRawPlatformInfo(platform: string): PlatformInfo | null {
   return infoMap[platform];
 }
 
-export async function getPlatformInfos(type?: 'DYNAMIC' | 'VIDEO' | 'ARTICLE' | 'PODCAST'): Promise<PlatformInfo[]> {
+export async function getPlatformInfos(type?: 'DYNAMIC' | 'VIDEO' | 'ARTICLE' | 'PODCAST' | 'YUNPAN'): Promise<PlatformInfo[]> {
   const platformInfos: PlatformInfo[] = [];
   for (const info of Object.values(infoMap)) {
     if (type && info.type !== type) continue;
