@@ -12,6 +12,7 @@ import {
   type VideoData,
   type SyncDataPlatform,
   injectScriptsToTabs,
+  type YunPanData,
 } from '~sync/common';
 import { Storage } from '@plasmohq/storage';
 
@@ -237,6 +238,29 @@ export default function Publish() {
       },
     };
   };
+
+  const processYunPan = async (data: SyncData) => {
+    setNotice(chrome.i18n.getMessage('processingContent'));
+    const { files } = data.data as YunPanData;
+
+    const processedFiles: FileData[] = [];
+    // 确保 images 是可迭代的数组
+    if (Array.isArray(files) && files.length > 0) {
+      for (const file of files) {
+        setNotice(chrome.i18n.getMessage('errorProcessImage', [file.name]));
+        processedFiles.push(await processFile(file));
+      }
+    } else {
+      console.warn('images 不是一个数组或可迭代对象', files);
+    }
+    return {
+      ...data,
+      data: {
+        ...data.data,
+        files: processedFiles,
+      },
+    };
+  }
 
   const handleReloadTab = async (tabId: number) => {
     try {
@@ -526,6 +550,10 @@ export default function Publish() {
           processedData = await processPodcast(data);
         }
 
+        if (data?.platforms.some((platform) => platform.name.includes('YUNPAN'))) {
+          processedData = await processYunPan(data);
+        }
+
         setData(processedData);
         setNotice(chrome.i18n.getMessage('processingComplete'));
 
@@ -733,3 +761,4 @@ export default function Publish() {
     </HeroUIProvider>
   );
 }
+

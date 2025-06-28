@@ -995,5 +995,8 @@
   "publishAutoCloseCountdown": {
     "message": "$1 秒后自动关闭",
     "description": "发布页面自动关闭倒计时文本"
+  },
+  "platformBaiduYun": {
+    "message": "百度云盘"
   }
 }

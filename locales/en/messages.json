@@ -1021,5 +1021,8 @@
   "publishAutoCloseCountdown": {
     "message": "Auto close in $1 seconds",
     "description": "Auto close countdown text for publish page"
+  },
+  "platformBaiduYun": {
+    "message": "Baidu yun pan"
   }
 }

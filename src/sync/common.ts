@@ -4,22 +4,23 @@ import { DynamicInfoMap } from './dynamic';
 import { getExtraConfigFromPlatformInfo, getExtraConfigFromPlatformInfos } from './extraconfig';
 import { PodcastInfoMap } from './podcast';
 import { VideoInfoMap } from './video';
+import { YunPanMap } from './yunpan/yunpan';
 
 export interface SyncDataPlatform {
   name: string;
   injectUrl?: string;
   extraConfig?:
-    | {
-        customInjectUrls?: string[]; // Beta 功能，用于自定义注入 URL
-      }
-    | unknown;
+  | {
+    customInjectUrls?: string[]; // Beta 功能，用于自定义注入 URL
+  }
+  | unknown;
 }
 
 export interface SyncData {
   platforms: SyncDataPlatform[];
   isAutoPublish: boolean;
-  data: DynamicData | ArticleData | VideoData | PodcastData;
-  origin?: DynamicData | ArticleData | VideoData | PodcastData; // Beta 功能，用于临时存储，发布时不需要提供该字段
+  data: DynamicData | ArticleData | VideoData | PodcastData | YunPanData;
+  origin?: DynamicData | ArticleData | VideoData | PodcastData | YunPanData; // Beta 功能，用于临时存储，发布时不需要提供该字段
 }
 
 export interface DynamicData {
@@ -27,6 +28,12 @@ export interface DynamicData {
   content: string;
   images: FileData[];
   videos: FileData[];
+}
+
+export interface YunPanData {
+  title: string;
+  paths: string[];
+  files: FileData[];
 }
 
 export interface PodcastData {
@@ -59,7 +66,7 @@ export interface VideoData {
 }
 
 export interface PlatformInfo {
-  type: 'DYNAMIC' | 'VIDEO' | 'ARTICLE' | 'PODCAST';
+  type: 'DYNAMIC' | 'VIDEO' | 'ARTICLE' | 'PODCAST' | 'YUNPAN';
   name: string;
   homeUrl: string;
   faviconUrl?: string;
@@ -88,6 +95,7 @@ export const infoMap: Record<string, PlatformInfo> = {
   ...ArticleInfoMap,
   ...VideoInfoMap,
   ...PodcastInfoMap,
+  ...YunPanMap,
 };
 
 export async function getPlatformInfo(platform: string): Promise<PlatformInfo | null> {
