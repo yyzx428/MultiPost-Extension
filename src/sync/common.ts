@@ -3,6 +3,7 @@ import { ArticleInfoMap } from './article';
 import { DynamicInfoMap } from './dynamic';
 import { getExtraConfigFromPlatformInfo, getExtraConfigFromPlatformInfos } from './extraconfig';
 import { PodcastInfoMap } from './podcast';
+import { ShangPinMap } from './shangpin/shangpin';
 import { VideoInfoMap } from './video';
 import { YunPanMap } from './yunpan/yunpan';
 
@@ -19,8 +20,8 @@ export interface SyncDataPlatform {
 export interface SyncData {
   platforms: SyncDataPlatform[];
   isAutoPublish: boolean;
-  data: DynamicData | ArticleData | VideoData | PodcastData | YunPanData;
-  origin?: DynamicData | ArticleData | VideoData | PodcastData | YunPanData; // Beta 功能，用于临时存储，发布时不需要提供该字段
+  data: DynamicData | ArticleData | VideoData | PodcastData | YunPanData | ShangPinData;
+  origin?: DynamicData | ArticleData | VideoData | PodcastData | YunPanData | ShangPinData; // Beta 功能，用于临时存储，发布时不需要提供该字段
 }
 
 export interface DynamicData {
@@ -58,6 +59,12 @@ export interface ArticleData {
   images?: FileData[]; // 发布时可不提供该字段
 }
 
+
+export interface ShangPinData {
+  title: string;
+  files: FileData[];
+}
+
 export interface VideoData {
   title: string;
   content: string;
@@ -66,7 +73,7 @@ export interface VideoData {
 }
 
 export interface PlatformInfo {
-  type: 'DYNAMIC' | 'VIDEO' | 'ARTICLE' | 'PODCAST' | 'YUNPAN';
+  type: 'DYNAMIC' | 'VIDEO' | 'ARTICLE' | 'PODCAST' | 'YUNPAN' | 'SHANGPIN';
   name: string;
   homeUrl: string;
   faviconUrl?: string;
@@ -96,6 +103,7 @@ export const infoMap: Record<string, PlatformInfo> = {
   ...VideoInfoMap,
   ...PodcastInfoMap,
   ...YunPanMap,
+  ...ShangPinMap,
 };
 
 export async function getPlatformInfo(platform: string): Promise<PlatformInfo | null> {
