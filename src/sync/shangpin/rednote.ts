@@ -35,14 +35,11 @@ export async function ShangpinRednote(data: SyncData) {
 
 
     async function choiceClassify() {
-        operationChoice('span[class="d-text --color-text-description-typography --size-text-small bold collapse-item"]',
-            "个性");
+        operationChoice('div[class="level-label"]', "个性");
 
-        operationChoice('span[class="d-text --color-text-title-typography --size-text-paragraph option-label"]',
-            "数字");
+        operationChoice('li[class="option"]', "数字");
 
-        operationChoice('span[class="d-text --color-text-title-typography --size-text-paragraph option-label"]',
-            "电子资料包");
+        operationChoice('li[class="option"]', "电子资料包");
     }
 
     async function operationChoice(path: string, labelName: string) {
@@ -56,10 +53,11 @@ export async function ShangpinRednote(data: SyncData) {
             return;
         }
 
-        label.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }))
+        label.children[0].dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }))
     }
 
     async function processImageError() {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
         const images = document.querySelectorAll('div[class="upload-trigger"]');
 
         for (const image of images) {
@@ -70,20 +68,25 @@ export async function ShangpinRednote(data: SyncData) {
             const caijian = Array.from(operations).find((element) => element.textContent.includes("裁剪")) as HTMLElement;
             if (!caijian) {
                 console.log("裁剪按钮没找到")
-                continue;
+                return false;
             }
             caijian.click();
+            caijian.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-            await waitForElement('span[class="d-text --color-current-typography --size-text-paragraph d-text-nowrap d-text-ellipsis d-text-nowrap"]');
-            const confirButtons = document.querySelectorAll('span[class="d-text --color-current-typography --size-text-paragraph d-text-nowrap d-text-ellipsis d-text-nowrap"]');
-            const confirButton = Array.from(confirButtons).find((element) => element.textContent.includes("确认")) as HTMLElement;
-            if (!confirButton) {
-                console.log("确认按钮没找到")
-                continue;
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+            const confirButtons = document.querySelector('div[class="d-drawer d-drawer-right material-operas-drawer"]')
+                .querySelectorAll('span[class="d-text --color-current-typography --size-text-paragraph d-text-nowrap d-text-ellipsis d-text-nowrap"]');
+            const confirmButton = Array.from(confirButtons).find((element) => element.textContent.includes('确认')) as HTMLElement;
+
+            if (!confirmButton) {
+                console.log('没有找到确认按钮');
+                return false;
             }
-            confirButton.click();
-            await new Promise((resolve) => setTimeout(resolve, 2000));
+
+            confirmButton.click();
+            confirmButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         }
+        return true;
     }
 
 
@@ -93,10 +96,11 @@ export async function ShangpinRednote(data: SyncData) {
         const batton = Array.from(battons).find((element) => element.textContent.includes("从商品主图填入")) as HTMLElement;
         if (!batton) {
             console.error("从商品主图填入按钮没找到")
-            return;
+            return false;
         }
         batton.click();
         await new Promise((resolve) => setTimeout(resolve, 2000));
+        return true;
     }
 
     async function prcessPrizeNum() {
@@ -143,27 +147,31 @@ export async function ShangpinRednote(data: SyncData) {
         ) as HTMLElement
         if (!uploadBotton) {
             console.log('没找到图片上传按钮');
-            return;
+            return false;
         }
 
         uploadBotton.click();
+        uploadBotton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-        waitForElement('span[class="d-text --color-current-typography --size-text-paragraph d-text-nowrap d-text-ellipsis d-text-nowrap"]')
+        waitForElement('input[placeholder="输入关键词"]')
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // 等待文件处理
         const localUploadButtons = document.querySelectorAll('span[class="d-text --color-current-typography --size-text-paragraph d-text-nowrap d-text-ellipsis d-text-nowrap"]');
         const localUploadButton = Array.from(localUploadButtons).find(
-            (element) => element.childNodes[0].textContent?.includes('上传本地图片'),
+            (element) => element.textContent?.includes('上传本地图片'),
         ) as HTMLElement
         if (!localUploadButton) {
             console.log('没找到本地图片上传按钮');
-            return;
+            return false;
         }
 
         localUploadButton.click();
+        localUploadButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // 等待文件处理
 
         const fileInput = (await waitForElement('input[type="file"]')) as HTMLInputElement;
         if (!fileInput) {
             console.error('未找到文件输入元素');
-            return;
+            return false;
         }
 
         const dataTransfer = new DataTransfer();
@@ -185,11 +193,36 @@ export async function ShangpinRednote(data: SyncData) {
         if (dataTransfer.files.length > 0) {
             fileInput.files = dataTransfer.files;
             fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-            await new Promise((resolve) => setTimeout(resolve, 2000)); // 等待文件处理
+            await new Promise((resolve) => setTimeout(resolve, 3000)); // 等待文件处理
             console.log('文件上传操作完成');
         } else {
             console.error('没有成功添加任何文件');
         }
+
+
+        let confirButtons = document.querySelector('div[class="d-drawer d-drawer-right material-upload-drawer"]')
+            .querySelectorAll('span[class="d-text --color-current-typography --size-text-paragraph d-text-nowrap d-text-ellipsis d-text-nowrap"]');
+        let confirmButton = Array.from(confirButtons).find((element) => element.textContent.includes('取消')) as HTMLElement;
+
+        if (!confirmButton) {
+            console.error('没有找到上传框取消按钮');
+            return false;
+        }
+
+        confirmButton.parentElement.parentElement.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
+        console.log(confirmButton.parentElement.parentElement);
+
+
+        confirButtons = document.querySelector('div[class="d-drawer d-drawer-right material-space-drawer"]')
+            .querySelectorAll('span[class="d-text --color-current-typography --size-text-paragraph d-text-nowrap d-text-ellipsis d-text-nowrap"]');
+        confirmButton = Array.from(confirButtons).find((element) => element.textContent.includes('取消')) as HTMLElement;
+        confirmButton.parentElement.parentElement.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
+
+        if (!confirmButton) {
+            console.error('没有找到素材库取消按钮');
+            return false;
+        }
+        return true;
     }
 
     if (files && files.length > 0) {
@@ -216,9 +249,16 @@ export async function ShangpinRednote(data: SyncData) {
         titleInput.dispatchEvent(new MouseEvent('input', { bubbles: true }));
         titleInput.dispatchEvent(new MouseEvent('blur', { bubbles: true }));
 
-        await uploadImages();
+        if (!await uploadImages()) {
+            return;
+        }
 
-        await processImageError();
+
+        if (!await processImageError()) {
+            return;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
         await choiceClassify();
 

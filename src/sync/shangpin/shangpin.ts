@@ -11,6 +11,6 @@ export const ShangPinMap: Record<string, PlatformInfo> = {
         injectUrl: 'https://ark.xiaohongshu.com/app-item/good/create',
         injectFunction: ShangpinRednote,
         tags: ['CN'],
-        accountKey: 'baiduyun',
+        accountKey: 'rednote',
     }
 };
