@@ -2,7 +2,8 @@ import type { SyncData, ShangPinData } from "~sync/common";
 
 export async function ShangpinRednote(data: SyncData) {
 
-    const { title, files } = data.data as ShangPinData;
+    const { isAutoPublish } = data;
+    const { title, files, prize, num } = data.data as ShangPinData;
 
     // 辅助函数：等待元素出现
     function waitForElement(selector: string, timeout = 10000): Promise<Element> {
@@ -35,11 +36,21 @@ export async function ShangpinRednote(data: SyncData) {
 
 
     async function choiceClassify() {
-        operationChoice('div[class="level-label"]', "个性");
+        if (!operationChoice('div[class="level-label"]', "个性")) {
+            return false;
+        }
 
-        operationChoice('li[class="option"]', "数字");
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (!operationChoice('li[class="option"]', "数字")) {
+            return false;
+        }
 
-        operationChoice('li[class="option"]', "电子资料包");
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (!operationChoice('li[class="option"]', "电子资料包")) {
+            return false;
+        }
+
+        return true;
     }
 
     async function operationChoice(path: string, labelName: string) {
@@ -50,7 +61,7 @@ export async function ShangpinRednote(data: SyncData) {
         ) as HTMLElement;
         if (!label) {
             console.log(labelName + '分类没找到');
-            return;
+            return false;
         }
 
         label.children[0].dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }))
@@ -106,26 +117,26 @@ export async function ShangpinRednote(data: SyncData) {
     async function prcessPrizeNum() {
         const inputs = document.querySelector('div[class="goods_excel-table-container"]').querySelectorAll('input');
 
-        const prize = inputs[0] as HTMLInputElement;
+        const prizeInput = inputs[0] as HTMLInputElement;
         if (!prize) {
             console.error("从商品价格输入框没找到")
             return;
         }
-        prize.dispatchEvent(new MouseEvent('focus', { bubbles: true }));
-        prize.value = '4.9';
-        prize.dispatchEvent(new MouseEvent('input', { bubbles: true }));
-        prize.dispatchEvent(new MouseEvent('blur', { bubbles: true }));
+        prizeInput.dispatchEvent(new MouseEvent('focus', { bubbles: true }));
+        prizeInput.value = prize;
+        prizeInput.dispatchEvent(new MouseEvent('input', { bubbles: true }));
+        prizeInput.dispatchEvent(new MouseEvent('blur', { bubbles: true }));
 
-        const nums = inputs[2]
-        if (!nums) {
+        const numsInput = inputs[2]
+        if (!numsInput) {
             console.error("从商品数量输入框没找到")
             return;
         }
 
-        nums.dispatchEvent(new MouseEvent('focus', { bubbles: true }));
-        nums.value = '100';
-        nums.dispatchEvent(new MouseEvent('input', { bubbles: true }));
-        nums.dispatchEvent(new MouseEvent('blur', { bubbles: true }));
+        numsInput.dispatchEvent(new MouseEvent('focus', { bubbles: true }));
+        numsInput.value = num;
+        numsInput.dispatchEvent(new MouseEvent('input', { bubbles: true }));
+        numsInput.dispatchEvent(new MouseEvent('blur', { bubbles: true }));
 
 
         const confirButtons = document.querySelectorAll('span[class="d-text --color-current-typography --size-text-paragraph d-text-nowrap d-text-ellipsis d-text-nowrap"]');
@@ -210,8 +221,6 @@ export async function ShangpinRednote(data: SyncData) {
         }
 
         confirmButton.parentElement.parentElement.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
-        console.log(confirmButton.parentElement.parentElement);
-
 
         confirButtons = document.querySelector('div[class="d-drawer d-drawer-right material-space-drawer"]')
             .querySelectorAll('span[class="d-text --color-current-typography --size-text-paragraph d-text-nowrap d-text-ellipsis d-text-nowrap"]');
@@ -258,11 +267,16 @@ export async function ShangpinRednote(data: SyncData) {
             return;
         }
 
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        if (!await choiceClassify()) {
+            console.log("没找到分类选项");
+            return;
+        }
+
         await new Promise((resolve) => setTimeout(resolve, 2000));
-
-        await choiceClassify();
-
-        const nextButton = await waitForElement('span[class="d-text --color-current-typography --size-text-paragraph d-text-nowrap d-text-ellipsis d-text-nowrap"]') as HTMLElement;
+        const nextButtons = document.querySelectorAll('span[class="d-text --color-current-typography --size-text-paragraph d-text-nowrap d-text-ellipsis d-text-nowrap"]');
+        const nextButton = Array.from(nextButtons).find((e) => e.textContent.includes('下一步')) as HTMLElement;
         if (!nextButton) {
             console.log("没找到下一步按钮");
             return;
@@ -270,9 +284,20 @@ export async function ShangpinRednote(data: SyncData) {
 
         nextButton.click();
 
+        await new Promise((resolve) => setTimeout(resolve, 3000));
         await processZhuTu();
 
         await prcessPrizeNum();
+
+        const publishButtons = document.querySelectorAll('div[class="d-button-content"]');
+        const publishText = isAutoPublish ? "提交商品" : "保存草稿"
+        const publishButton = Array.from(publishButtons).find((e) => e.children[0].textContent.includes(publishText)) as HTMLElement;
+        if (!publishButton) {
+            console.log("没找到" + publishText + "按钮");
+            return;
+        }
+
+        publishButton.parentElement.click();
 
         console.log("完成小红书商品上传");
     }

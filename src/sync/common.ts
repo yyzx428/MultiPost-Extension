@@ -62,6 +62,8 @@ export interface ArticleData {
 
 export interface ShangPinData {
   title: string;
+  prize: string;
+  num: string;
   files: FileData[];
 }
 

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export {};
+export { };
 
 import {
   addTabsManagerMessages,
@@ -144,7 +144,7 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
     }
   }
 };
-starter(1000 * 30);
+starter(1000);
 // Message Handler || 消息处理器 || END
 
 // Keep Alive || 保活机制 || START
