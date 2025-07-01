@@ -6,6 +6,7 @@ import { getRednoteAccountInfo } from './account/rednote';
 import { getBilibiliAccountInfo } from './account/bilibili';
 import { Storage } from '@plasmohq/storage';
 import { ping } from '~background/services/api';
+import { getBaiduYunAccountInfo } from './account/baidu';
 
 // 存储账号信息的键名
 export const ACCOUNT_INFO_STORAGE_KEY = 'multipost_account_info';
@@ -59,6 +60,13 @@ export const refreshAccountInfoMap: Record<
     homeUrl: 'https://t.bilibili.com',
     faviconUrl: 'https://static.hdslb.com/images/favicon.ico',
     getAccountInfo: getBilibiliAccountInfo,
+  },
+  baiduyun: {
+    platformName: chrome.i18n.getMessage('platformBaiduYun'),
+    accountKey: 'baiduyun',
+    homeUrl: 'https://pan.baidu.com',
+    faviconUrl: 'https://nd-static.bdstatic.com/m-static/v20-main/home/img/icon-home-new.b4083345.png',
+    getAccountInfo: getBaiduYunAccountInfo,
   },
 };
 

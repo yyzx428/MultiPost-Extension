@@ -36,7 +36,7 @@ export async function ShangpinRednote(data: SyncData) {
 
 
     async function choiceClassify() {
-        if (!operationChoice('div[class="level-label"]', "个性")) {
+        if (!operationChoice('li[class="option"]', "个性")) {
             return false;
         }
 
@@ -289,6 +289,7 @@ export async function ShangpinRednote(data: SyncData) {
 
         await prcessPrizeNum();
 
+        await new Promise((resolve) => setTimeout(resolve, 2000));
         const publishButtons = document.querySelectorAll('div[class="d-button-content"]');
         const publishText = isAutoPublish ? "提交商品" : "保存草稿"
         const publishButton = Array.from(publishButtons).find((e) => e.children[0].textContent.includes(publishText)) as HTMLElement;
