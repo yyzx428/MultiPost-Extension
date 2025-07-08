@@ -86,11 +86,13 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
   }
   if (request.action === 'MUTLIPOST_EXTENSION_PUBLISH') {
     const data = request.data as SyncData;
+    // 将 ExtensionExternalRequest 中的 traceId 传递到 SyncData 中
+    data.traceId = request.traceId;
     currentSyncData = data;
 
     // 初始化发布请求跟踪
     currentPublishRequest = {
-      traceId: data.traceId,
+      traceId: request.traceId, // 直接从 ExtensionExternalRequest 中获取 traceId
       originTabId: sender.tab?.id,
       originWindowId: sender.tab?.windowId,
       expectedResultsCount: data.platforms.length,

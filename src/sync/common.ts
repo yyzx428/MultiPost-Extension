@@ -22,7 +22,7 @@ export interface SyncData {
   isAutoPublish: boolean;
   data: DynamicData | ArticleData | VideoData | PodcastData | YunPanData | ShangPinData;
   origin?: DynamicData | ArticleData | VideoData | PodcastData | YunPanData | ShangPinData; // Beta 功能，用于临时存储，发布时不需要提供该字段
-  traceId?: string; // 用于跟踪发布请求的唯一标识，与ExtensionExternalRequest保持一致
+  traceId?: string; // 从 ExtensionExternalRequest.traceId 传递过来的跟踪标识符
 }
 
 export interface DynamicData {
