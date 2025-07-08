@@ -1,4 +1,4 @@
-export {};
+export { };
 import type { PlasmoCSConfig } from 'plasmo';
 import type { ExtensionExternalRequest, ExtensionExternalResponse } from '~types/external';
 import { Storage } from '@plasmohq/storage';
@@ -30,6 +30,9 @@ async function isOriginTrusted(origin: string, action: string): Promise<boolean>
   });
 }
 
+// 存储原始发布请求的source，用于后续结果回传
+let publishRequestSource: MessageEventSource | null = null;
+
 window.addEventListener('message', async (event) => {
   const request: ExtensionExternalRequest<unknown> = event.data;
 
@@ -51,7 +54,33 @@ window.addEventListener('message', async (event) => {
     return;
   }
 
+  // 如果是发布请求，保存source用于后续结果回传
+  if (request.action === 'MUTLIPOST_EXTENSION_PUBLISH') {
+    publishRequestSource = event.source;
+  }
+
   defaultHandler(request, event);
+});
+
+// 监听来自背景脚本的发布完成消息
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.action === 'MUTLIPOST_EXTENSION_PUBLISH_COMPLETE') {
+    // 将聚合结果转发给原始发起窗口
+    if (publishRequestSource) {
+      publishRequestSource.postMessage({
+        type: 'response',
+        action: 'MUTLIPOST_EXTENSION_PUBLISH_COMPLETE',
+        code: 0,
+        message: 'success',
+        data: message.data,
+      });
+
+      console.log('已向原始发起窗口发送发布完成结果:', message.data);
+
+      // 清理引用
+      publishRequestSource = null;
+    }
+  }
 });
 
 function defaultHandler<T>(request: ExtensionExternalRequest<T>, event: MessageEvent) {

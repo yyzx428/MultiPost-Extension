@@ -251,6 +251,7 @@ export async function injectScriptsToTabs(
                       };
 
                       try {
+                        // 发送到窗口（保留原有功能）
                         if (window.parent !== window) {
                           window.parent.postMessage(message, '*');
                         }
@@ -258,6 +259,12 @@ export async function injectScriptsToTabs(
                           window.opener.postMessage(message, '*');
                         }
                         window.postMessage(message, '*');
+
+                        // 发送到背景脚本进行聚合
+                        chrome.runtime.sendMessage({
+                          action: 'MUTLIPOST_EXTENSION_PUBLISH_RESULT',
+                          data: result
+                        });
 
                         console.log(`[Wrapper] 执行完成消息已发送: ${platformName}`, result);
                       } catch (error) {
@@ -283,6 +290,7 @@ export async function injectScriptsToTabs(
                       };
 
                       try {
+                        // 发送到窗口（保留原有功能）
                         if (window.parent !== window) {
                           window.parent.postMessage(message, '*');
                         }
@@ -290,6 +298,12 @@ export async function injectScriptsToTabs(
                           window.opener.postMessage(message, '*');
                         }
                         window.postMessage(message, '*');
+
+                        // 发送到背景脚本进行聚合
+                        chrome.runtime.sendMessage({
+                          action: 'MUTLIPOST_EXTENSION_PUBLISH_RESULT',
+                          data: result
+                        });
 
                         console.log(`[Wrapper] 手动发送结果已发送: ${platformName}`, result);
                       } catch (error) {

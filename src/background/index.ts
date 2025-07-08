@@ -63,6 +63,23 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // Message Handler || 消息处理器 || START
 let currentSyncData: SyncData | null = null;
 let currentPublishPopup: chrome.windows.Window | null = null;
+// 新增：跟踪发布请求信息
+let currentPublishRequest: {
+  requestId?: string;
+  originTabId?: number;
+  originWindowId?: number;
+  expectedResultsCount: number;
+  receivedResults: Array<{
+    requestId: string;
+    platformName: string;
+    success: boolean;
+    publishUrl: string;
+    errorMessage?: string;
+    timestamp: number;
+  }>;
+  timeoutId?: NodeJS.Timeout;
+} | null = null;
+
 const defaultMessageHandler = (request, sender, sendResponse) => {
   if (request.action === 'MUTLIPOST_EXTENSION_CHECK_SERVICE_STATUS') {
     sendResponse({ extensionId: chrome.runtime.id });
@@ -70,6 +87,21 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
   if (request.action === 'MUTLIPOST_EXTENSION_PUBLISH') {
     const data = request.data as SyncData;
     currentSyncData = data;
+
+    // 初始化发布请求跟踪
+    currentPublishRequest = {
+      requestId: data.requestId,
+      originTabId: sender.tab?.id,
+      originWindowId: sender.tab?.windowId,
+      expectedResultsCount: data.platforms.length,
+      receivedResults: [],
+      // 设置5分钟超时
+      timeoutId: setTimeout(() => {
+        console.log('发布超时，发送已收到的结果');
+        sendAggregatedResultsToOrigin();
+      }, 5 * 60 * 1000) // 5分钟超时
+    };
+
     (async () => {
       currentPublishPopup = await chrome.windows.create({
         url: chrome.runtime.getURL(`tabs/publish.html`),
@@ -79,6 +111,26 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
       });
     })();
   }
+
+  // 新增：处理发布结果消息
+  if (request.action === 'MUTLIPOST_EXTENSION_PUBLISH_RESULT') {
+    const result = request.data;
+
+    if (currentPublishRequest && result.requestId === currentPublishRequest.requestId) {
+      // 添加结果到集合中
+      currentPublishRequest.receivedResults.push(result);
+
+      console.log(`收到发布结果: ${result.platformName}，成功: ${result.success}`);
+      console.log(`已收到 ${currentPublishRequest.receivedResults.length}/${currentPublishRequest.expectedResultsCount} 个结果`);
+
+      // 检查是否所有平台都已返回结果
+      if (currentPublishRequest.receivedResults.length >= currentPublishRequest.expectedResultsCount) {
+        // 发送聚合结果回原始窗口
+        sendAggregatedResultsToOrigin();
+      }
+    }
+  }
+
   if (request.action === 'MUTLIPOST_EXTENSION_PLATFORMS') {
     getPlatformInfos().then((platforms) => {
       sendResponse({ platforms });
@@ -144,6 +196,43 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
     }
   }
 };
+
+// 新增：发送聚合结果到原始窗口的函数
+async function sendAggregatedResultsToOrigin() {
+  if (!currentPublishRequest) return;
+
+  // 清理超时定时器
+  if (currentPublishRequest.timeoutId) {
+    clearTimeout(currentPublishRequest.timeoutId);
+  }
+
+  const aggregatedResult = {
+    requestId: currentPublishRequest.requestId,
+    totalPlatforms: currentPublishRequest.expectedResultsCount,
+    successCount: currentPublishRequest.receivedResults.filter(r => r.success).length,
+    failureCount: currentPublishRequest.receivedResults.filter(r => !r.success).length,
+    results: currentPublishRequest.receivedResults,
+    timestamp: Date.now()
+  };
+
+  console.log('发送聚合发布结果:', aggregatedResult);
+
+  try {
+    // 尝试向原始标签页发送消息
+    if (currentPublishRequest.originTabId) {
+      await chrome.tabs.sendMessage(currentPublishRequest.originTabId, {
+        action: 'MUTLIPOST_EXTENSION_PUBLISH_COMPLETE',
+        data: aggregatedResult
+      });
+      console.log('已向原始标签页发送聚合结果');
+    }
+  } catch (error) {
+    console.error('向原始标签页发送结果失败:', error);
+  }
+
+  // 清理当前发布请求状态
+  currentPublishRequest = null;
+}
 starter(1000);
 // Message Handler || 消息处理器 || END
 
