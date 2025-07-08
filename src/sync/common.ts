@@ -22,7 +22,7 @@ export interface SyncData {
   isAutoPublish: boolean;
   data: DynamicData | ArticleData | VideoData | PodcastData | YunPanData | ShangPinData;
   origin?: DynamicData | ArticleData | VideoData | PodcastData | YunPanData | ShangPinData; // Beta 功能，用于临时存储，发布时不需要提供该字段
-  requestId?: string; // 新增：用于跟踪发布请求的唯一标识
+  traceId?: string; // 用于跟踪发布请求的唯一标识，与ExtensionExternalRequest保持一致
 }
 
 export interface DynamicData {
@@ -218,11 +218,11 @@ export async function injectScriptsToTabs(
           // 注入包装的发布脚本
           getPlatformInfo(platform.name).then((info) => {
             if (info) {
-              // 如果有 requestId，使用包装函数添加监控
-              if (data.requestId) {
+              // 如果有 traceId，使用包装函数添加监控
+              if (data.traceId) {
                 chrome.scripting.executeScript({
                   target: { tabId: tab.id },
-                  func: function (data, originalFuncStr, requestId, platformName) {
+                  func: function (data, originalFuncStr, traceId, platformName) {
                     /**
                      * 简化包装函数 - 脚本执行完成后发送消息
                      * @description 在原函数外层包装，执行完成后发送完成消息
@@ -237,7 +237,7 @@ export async function injectScriptsToTabs(
                      */
                     function sendCompletionMessage(success, errorMessage = undefined) {
                       const result = {
-                        requestId,
+                        traceId,
                         platformName,
                         success,
                         publishUrl: window.location.href, // 使用当前页面URL
@@ -276,7 +276,7 @@ export async function injectScriptsToTabs(
                     (window as Window & { multipostSendResult?: (success: boolean, publishUrl: string, errorMessage?: string) => void }).multipostSendResult = function (success, publishUrl, errorMessage) {
                       console.log(`[Wrapper] 收到手动发送结果调用`);
                       const result = {
-                        requestId,
+                        traceId,
                         platformName,
                         success,
                         publishUrl: publishUrl || window.location.href,
@@ -333,10 +333,10 @@ export async function injectScriptsToTabs(
                       throw error;
                     }
                   },
-                  args: [data, info.injectFunction.toString(), data.requestId, platform.name]
+                  args: [data, info.injectFunction.toString(), data.traceId, platform.name]
                 });
               } else {
-                // 没有 requestId，直接注入原函数
+                // 没有 traceId，直接注入原函数
                 chrome.scripting.executeScript({
                   target: { tabId: tab.id },
                   func: info.injectFunction,

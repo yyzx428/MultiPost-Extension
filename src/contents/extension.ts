@@ -30,8 +30,9 @@ async function isOriginTrusted(origin: string, action: string): Promise<boolean>
   });
 }
 
-// 存储原始发布请求的source，用于后续结果回传
+// 存储原始发布请求的source和traceId，用于后续结果回传
 let publishRequestSource: MessageEventSource | null = null;
+let publishRequestTraceId: string | null = null;
 
 window.addEventListener('message', async (event) => {
   const request: ExtensionExternalRequest<unknown> = event.data;
@@ -54,9 +55,10 @@ window.addEventListener('message', async (event) => {
     return;
   }
 
-  // 如果是发布请求，保存source用于后续结果回传
+  // 如果是发布请求，保存source和traceId用于后续结果回传
   if (request.action === 'MUTLIPOST_EXTENSION_PUBLISH') {
     publishRequestSource = event.source;
+    publishRequestTraceId = request.traceId;
   }
 
   defaultHandler(request, event);
@@ -66,9 +68,10 @@ window.addEventListener('message', async (event) => {
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action === 'MUTLIPOST_EXTENSION_PUBLISH_COMPLETE') {
     // 将聚合结果转发给原始发起窗口
-    if (publishRequestSource) {
+    if (publishRequestSource && publishRequestTraceId) {
       publishRequestSource.postMessage({
         type: 'response',
+        traceId: publishRequestTraceId,
         action: 'MUTLIPOST_EXTENSION_PUBLISH_COMPLETE',
         code: 0,
         message: 'success',
@@ -79,6 +82,7 @@ chrome.runtime.onMessage.addListener((message) => {
 
       // 清理引用
       publishRequestSource = null;
+      publishRequestTraceId = null;
     }
   }
 });

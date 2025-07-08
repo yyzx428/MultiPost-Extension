@@ -65,12 +65,12 @@ let currentSyncData: SyncData | null = null;
 let currentPublishPopup: chrome.windows.Window | null = null;
 // 新增：跟踪发布请求信息
 let currentPublishRequest: {
-  requestId?: string;
+  traceId?: string;
   originTabId?: number;
   originWindowId?: number;
   expectedResultsCount: number;
   receivedResults: Array<{
-    requestId: string;
+    traceId: string;
     platformName: string;
     success: boolean;
     publishUrl: string;
@@ -90,7 +90,7 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
 
     // 初始化发布请求跟踪
     currentPublishRequest = {
-      requestId: data.requestId,
+      traceId: data.traceId,
       originTabId: sender.tab?.id,
       originWindowId: sender.tab?.windowId,
       expectedResultsCount: data.platforms.length,
@@ -116,7 +116,7 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
   if (request.action === 'MUTLIPOST_EXTENSION_PUBLISH_RESULT') {
     const result = request.data;
 
-    if (currentPublishRequest && result.requestId === currentPublishRequest.requestId) {
+    if (currentPublishRequest && result.traceId === currentPublishRequest.traceId) {
       // 添加结果到集合中
       currentPublishRequest.receivedResults.push(result);
 
@@ -207,7 +207,7 @@ async function sendAggregatedResultsToOrigin() {
   }
 
   const aggregatedResult = {
-    requestId: currentPublishRequest.requestId,
+    traceId: currentPublishRequest.traceId,
     totalPlatforms: currentPublishRequest.expectedResultsCount,
     successCount: currentPublishRequest.receivedResults.filter(r => r.success).length,
     failureCount: currentPublishRequest.receivedResults.filter(r => !r.success).length,
