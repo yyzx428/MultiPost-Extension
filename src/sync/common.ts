@@ -22,6 +22,7 @@ export interface SyncData {
   isAutoPublish: boolean;
   data: DynamicData | ArticleData | VideoData | PodcastData | YunPanData | ShangPinData;
   origin?: DynamicData | ArticleData | VideoData | PodcastData | YunPanData | ShangPinData; // Beta 功能，用于临时存储，发布时不需要提供该字段
+  requestId?: string; // 新增：用于跟踪发布请求的唯一标识
 }
 
 export interface DynamicData {
@@ -211,13 +212,123 @@ export async function injectScriptsToTabs(
       chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
         if (tabId === tab.id && info.status === 'complete') {
           chrome.tabs.onUpdated.removeListener(listener);
+
+
+
+          // 注入包装的发布脚本
           getPlatformInfo(platform.name).then((info) => {
             if (info) {
-              chrome.scripting.executeScript({
-                target: { tabId: tab.id },
-                func: info.injectFunction,
-                args: [data],
-              });
+              // 如果有 requestId，使用包装函数添加监控
+              if (data.requestId) {
+                chrome.scripting.executeScript({
+                  target: { tabId: tab.id },
+                  func: function (data, originalFuncStr, requestId, platformName) {
+                    /**
+                     * 简化包装函数 - 脚本执行完成后发送消息
+                     * @description 在原函数外层包装，执行完成后发送完成消息
+                     */
+
+                    console.log(`[Wrapper] 开始执行发布: ${platformName}`);
+
+                    /**
+                     * 发送完成消息
+                     * @param {boolean} success - 是否成功执行
+                     * @param {string} errorMessage - 错误信息（可选）
+                     */
+                    function sendCompletionMessage(success, errorMessage = undefined) {
+                      const result = {
+                        requestId,
+                        platformName,
+                        success,
+                        publishUrl: window.location.href, // 使用当前页面URL
+                        errorMessage,
+                        timestamp: Date.now()
+                      };
+
+                      const message = {
+                        type: 'MULTIPOST_PUBLISH_RESULT',
+                        data: result
+                      };
+
+                      try {
+                        if (window.parent !== window) {
+                          window.parent.postMessage(message, '*');
+                        }
+                        if (window.opener) {
+                          window.opener.postMessage(message, '*');
+                        }
+                        window.postMessage(message, '*');
+
+                        console.log(`[Wrapper] 执行完成消息已发送: ${platformName}`, result);
+                      } catch (error) {
+                        console.error('[Wrapper] 发送消息失败:', error);
+                      }
+                    }
+
+                    // 提供手动发送结果的函数（可选使用）
+                    (window as Window & { multipostSendResult?: (success: boolean, publishUrl: string, errorMessage?: string) => void }).multipostSendResult = function (success, publishUrl, errorMessage) {
+                      console.log(`[Wrapper] 收到手动发送结果调用`);
+                      const result = {
+                        requestId,
+                        platformName,
+                        success,
+                        publishUrl: publishUrl || window.location.href,
+                        errorMessage,
+                        timestamp: Date.now()
+                      };
+
+                      const message = {
+                        type: 'MULTIPOST_PUBLISH_RESULT',
+                        data: result
+                      };
+
+                      try {
+                        if (window.parent !== window) {
+                          window.parent.postMessage(message, '*');
+                        }
+                        if (window.opener) {
+                          window.opener.postMessage(message, '*');
+                        }
+                        window.postMessage(message, '*');
+
+                        console.log(`[Wrapper] 手动发送结果已发送: ${platformName}`, result);
+                      } catch (error) {
+                        console.error('[Wrapper] 发送结果失败:', error);
+                      }
+                    };
+
+                    try {
+                      // 执行原始发布函数
+                      console.log(`[Wrapper] 执行原始发布函数...`);
+                      const originalFunc = new Function('data', `return (${originalFuncStr})(data);`);
+                      const result = originalFunc(data);
+
+                      console.log(`[Wrapper] 原始发布函数执行完成`);
+
+                      // 发送执行完成消息
+                      sendCompletionMessage(true);
+
+                      return result;
+
+                    } catch (error) {
+                      console.error(`[Wrapper] 原始发布函数执行出错:`, error);
+
+                      // 发送执行失败消息
+                      sendCompletionMessage(false, `执行错误: ${error.message}`);
+
+                      throw error;
+                    }
+                  },
+                  args: [data, info.injectFunction.toString(), data.requestId, platform.name]
+                });
+              } else {
+                // 没有 requestId，直接注入原函数
+                chrome.scripting.executeScript({
+                  target: { tabId: tab.id },
+                  func: info.injectFunction,
+                  args: [data],
+                });
+              }
             }
           });
         }
