@@ -41,6 +41,7 @@ interface FormState {
   tags: string[];
   selectedPlatforms: string[];
   autoPublish: boolean;
+  originalFlag: boolean; // 原创声明标志
 }
 
 const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
@@ -52,6 +53,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
     tags: [],
     selectedPlatforms: [],
     autoPublish: false,
+    originalFlag: false,
   });
 
   const [viewerState, setViewerState] = useState({
@@ -249,6 +251,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
         images: formState.images,
         videos: formState.videos,
         tags: formState.tags,
+        originalFlag: formState.originalFlag,
       },
       isAutoPublish: formState.autoPublish,
     };
@@ -287,6 +290,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
       tags: [],
       selectedPlatforms: [],
       autoPublish: false,
+      originalFlag: false,
     });
   }, []);
 
@@ -528,13 +532,23 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
         <div className="flex flex-col w-full gap-4 md:w-1/2">
           <div className="flex flex-col gap-4 p-4 rounded-lg bg-default-50">
             <div className="flex items-center justify-between mb-2">
-              <Switch
-                isSelected={formState.autoPublish}
-                onValueChange={(value) => setFormState((prev) => ({ ...prev, autoPublish: value }))}
-                startContent={<BotIcon className="size-4" />}
-                endContent={<HandIcon className="size-4" />}>
-                {chrome.i18n.getMessage('optionsAutoPublish')}
-              </Switch>
+              <div className="flex flex-col gap-2">
+                <Switch
+                  isSelected={formState.autoPublish}
+                  onValueChange={(value) => setFormState((prev) => ({ ...prev, autoPublish: value }))}
+                  startContent={<BotIcon className="size-4" />}
+                  endContent={<HandIcon className="size-4" />}>
+                  {chrome.i18n.getMessage('optionsAutoPublish')}
+                </Switch>
+
+                <Switch
+                  isSelected={formState.originalFlag}
+                  onValueChange={(value) => setFormState((prev) => ({ ...prev, originalFlag: value }))}
+                  startContent={<span className="text-xs">📝</span>}
+                  size="sm">
+                  原创声明
+                </Switch>
+              </div>
 
               {formState.selectedPlatforms.length > 0 && (
                 <Button

@@ -32,6 +32,7 @@ export interface DynamicData {
   images: FileData[];
   videos: FileData[];
   tags?: string[];
+  originalFlag?: boolean; // 原创声明标志
 }
 
 export interface YunPanData {

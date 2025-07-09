@@ -2,7 +2,7 @@ import type { DynamicData, SyncData } from '../common';
 
 // 优先发布图文
 export async function DynamicRednote(data: SyncData) {
-  const { title, content, images, tags } = data.data as DynamicData;
+  const { title, content, images, tags, originalFlag } = data.data as DynamicData;
 
   // 辅助函数：等待元素出现
   function waitForElement(selector: string, timeout = 10000): Promise<Element> {
@@ -31,6 +31,167 @@ export async function DynamicRednote(data: SyncData) {
         reject(new Error(`Element with selector "${selector}" not found within ${timeout}ms`));
       }, timeout);
     });
+  }
+
+  // 辅助函数：等待元素状态变化
+  function waitForElementCondition(selector: string, condition: (element: Element) => boolean, timeout = 10000): Promise<Element> {
+    return new Promise((resolve, reject) => {
+      const element = document.querySelector(selector);
+      if (element && condition(element)) {
+        resolve(element);
+        return;
+      }
+
+      const observer = new MutationObserver(() => {
+        const element = document.querySelector(selector);
+        if (element && condition(element)) {
+          resolve(element);
+          observer.disconnect();
+        }
+      });
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['disabled', 'class']
+      });
+
+      setTimeout(() => {
+        observer.disconnect();
+        reject(new Error(`Element condition not met within ${timeout}ms`));
+      }, timeout);
+    });
+  }
+
+
+
+  // 辅助函数：处理原创声明
+  async function handleOriginalDeclaration(): Promise<void> {
+    try {
+      console.log('开始处理原创声明...');
+
+      // 等待页面完全加载
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // 步骤1: 点击呼出原创声明面板
+      console.log('步骤1: 呼出原创声明面板...');
+      const declareButton = document.querySelector('span[class="btn-text red"]');
+
+      if (declareButton) {
+        console.log('找到原创声明按钮，点击呼出面板...');
+        (declareButton as HTMLElement).click();
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      } else {
+        console.error('未找到原创声明按钮');
+        return;
+      }
+
+      // 步骤2: 等待原创声明容器出现
+      console.log('步骤2: 等待原创声明容器出现...');
+      let originalContainer: Element;
+      try {
+        originalContainer = await waitForElement('div[class="originalContainer"]', 5000);
+        console.log('原创声明容器已出现');
+      } catch {
+        console.error('等待原创声明容器超时');
+        return;
+      }
+
+      // 步骤3: 在容器中查找复选框
+      console.log('步骤3: 在原创声明容器中查找复选框...');
+      const checkbox = originalContainer.querySelector('input[type="checkbox"]') as HTMLInputElement;
+
+      if (checkbox) {
+        console.log('找到原创声明复选框，勾选...');
+        console.log('复选框状态:', {
+          checked: checkbox.checked,
+          className: checkbox.className,
+          id: checkbox.id
+        });
+
+        checkbox.click();
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        console.log('复选框勾选后的状态:', {
+          checked: checkbox.checked
+        });
+      } else {
+        console.error('在原创声明容器中未找到复选框');
+        return;
+      }
+
+      // 步骤4: 等待"声明原创"按钮变为可用状态
+      console.log('步骤4: 等待"声明原创"按钮变为可用状态...');
+      let confirmButton: HTMLButtonElement | null = null;
+      try {
+        confirmButton = await waitForElementCondition(
+          'button.d-button.d-button-default.d-button-with-content',
+          (element) => {
+            const text = element.textContent?.trim();
+            const isDisabled = element.hasAttribute('disabled') || element.classList.contains('disabled');
+            console.log('检查按钮:', { text, isDisabled });
+            return text === '声明原创' && !isDisabled;
+          },
+          10000
+        ) as HTMLButtonElement;
+        console.log('"声明原创"按钮已变为可用状态');
+      } catch {
+        console.log('等待按钮可用状态超时，尝试查找当前按钮...');
+
+        // 查找所有"声明原创"按钮
+        const allButtons = document.querySelectorAll('button');
+        confirmButton = Array.from(allButtons).find(btn =>
+          btn.textContent?.trim() === '声明原创'
+        ) as HTMLButtonElement;
+
+        if (confirmButton) {
+          console.log('找到"声明原创"按钮，但可能仍为禁用状态');
+        } else {
+          console.error('未找到"声明原创"按钮');
+          return;
+        }
+      }
+
+      // 步骤5: 点击"声明原创"按钮
+      if (confirmButton) {
+        console.log('步骤5: 点击"声明原创"按钮...');
+        console.log('按钮信息:', {
+          text: confirmButton.textContent?.trim(),
+          className: confirmButton.className,
+          disabled: confirmButton.disabled
+        });
+
+        // 如果按钮仍然禁用，尝试强制点击
+        if (confirmButton.disabled) {
+          console.log('按钮仍为禁用状态，尝试强制点击...');
+          // 移除禁用属性并点击
+          confirmButton.disabled = false;
+          confirmButton.classList.remove('disabled');
+          confirmButton.style.pointerEvents = 'auto';
+        }
+
+        confirmButton.click();
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+
+      // 步骤6: 检查是否成功
+      console.log('步骤6: 检查原创声明是否成功...');
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // 检查原创声明容器是否消失
+      const checkContainer = document.querySelector('div[class="originalContainer"]');
+      if (checkContainer) {
+        console.log('原创声明容器仍然存在，可能需要重新处理');
+      } else {
+        console.log('原创声明容器已消失，原创声明处理成功');
+      }
+
+      console.log('原创声明处理流程完成');
+
+    } catch (error) {
+      console.error('处理原创声明时出错:', error);
+    }
   }
 
   // 辅助函数：添加标签
@@ -162,6 +323,12 @@ export async function DynamicRednote(data: SyncData) {
 
       // 添加标签
       await addTags(contentEditor);
+    }
+
+    // 处理原创声明
+    if (originalFlag) {
+      console.log('检测到原创声明标志，开始处理原创声明...');
+      await handleOriginalDeclaration();
     }
 
     // 自动发布
