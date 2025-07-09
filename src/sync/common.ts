@@ -31,6 +31,7 @@ export interface DynamicData {
   content: string;
   images: FileData[];
   videos: FileData[];
+  tags?: string[];
 }
 
 export interface YunPanData {

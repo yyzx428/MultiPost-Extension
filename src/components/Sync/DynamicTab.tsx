@@ -38,6 +38,7 @@ interface FormState {
   content: string;
   images: FileData[];
   videos: FileData[];
+  tags: string[];
   selectedPlatforms: string[];
   autoPublish: boolean;
 }
@@ -48,6 +49,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
     content: process.env.NODE_ENV === 'development' ? '开发环境内容' : '',
     images: [],
     videos: [],
+    tags: [],
     selectedPlatforms: [],
     autoPublish: false,
   });
@@ -214,8 +216,8 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
           fileType === 'image'
             ? [...prev.images, ...newFiles]
             : newFiles.length > 0 && prev.videos.length < MAX_VIDEO_COUNT
-            ? [newFiles[0]]
-            : prev.videos,
+              ? [newFiles[0]]
+              : prev.videos,
       }));
     },
     [handleFileProcess],
@@ -246,6 +248,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
         content: formState.content,
         images: formState.images,
         videos: formState.videos,
+        tags: formState.tags,
       },
       isAutoPublish: formState.autoPublish,
     };
@@ -281,9 +284,28 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
       content: '',
       images: [],
       videos: [],
+      tags: [],
       selectedPlatforms: [],
       autoPublish: false,
     });
+  }, []);
+
+  // 标签处理函数
+  const handleTagsChange = useCallback((value: string) => {
+    // 将逗号分隔的标签字符串转换为数组
+    const tags = value
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(tag => tag.length > 0)
+      .slice(0, 10); // 限制最多10个标签
+    setFormState(prev => ({ ...prev, tags }));
+  }, []);
+
+
+
+  // 删除标签
+  const handleRemoveTag = useCallback((index: number) => {
+    setFormState(prev => ({ ...prev, tags: prev.tags.filter((_, i) => i !== index) }));
   }, []);
 
   // 清空平台选择
@@ -329,17 +351,68 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
             </CardHeader>
 
             <CardBody>
-              <Textarea
-                isClearable
-                label={chrome.i18n.getMessage('optionsEnterDynamicContent')}
-                value={formState.content}
-                onChange={(e) => setFormState((prev) => ({ ...prev, content: e.target.value }))}
-                variant="underlined"
-                minRows={5}
-                className="w-full"
-                autoFocus
-                onClear={() => setFormState((prev) => ({ ...prev, content: '' }))}
-              />
+              <div className="flex flex-col gap-4">
+                <Textarea
+                  isClearable
+                  label={chrome.i18n.getMessage('optionsEnterDynamicContent')}
+                  value={formState.content}
+                  onChange={(e) => setFormState((prev) => ({ ...prev, content: e.target.value }))}
+                  variant="underlined"
+                  minRows={5}
+                  className="w-full"
+                  autoFocus
+                  onClear={() => setFormState((prev) => ({ ...prev, content: '' }))}
+                />
+
+                {/* 标签输入区域 */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <Input
+                      variant="underlined"
+                      label="标签 (用逗号分隔)"
+                      placeholder="输入标签，用逗号分隔，如：标签1,标签2,标签3"
+                      value={formState.tags.join(', ')}
+                      onChange={(e) => handleTagsChange(e.target.value)}
+                      className="w-full"
+                      isDisabled={formState.tags.length >= 10}
+                    />
+                    <span className="text-xs text-gray-500 ml-2 whitespace-nowrap">
+                      {formState.tags.length}/10
+                    </span>
+                  </div>
+
+                  {/* 标签显示区域 */}
+                  {formState.tags.length > 0 && (
+                    <div className="flex flex-col gap-2 mt-2">
+                      <div className="flex flex-wrap gap-2">
+                        {formState.tags.map((tag, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center gap-1 px-2 py-1 text-sm bg-primary-100 text-primary-700 rounded-full"
+                          >
+                            <span>#{tag}</span>
+                            <Button
+                              isIconOnly
+                              size="sm"
+                              variant="light"
+                              color="danger"
+                              onPress={() => handleRemoveTag(index)}
+                              className="min-w-0 w-4 h-4 p-0"
+                            >
+                              <XIcon className="size-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                      {formState.tags.length >= 10 && (
+                        <div className="text-xs text-amber-600">
+                          已达到最大标签数量限制 (10个)
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </CardBody>
 
             <CardFooter>
@@ -379,16 +452,17 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
                 {(formState.title ||
                   formState.content ||
                   formState.images.length > 0 ||
-                  formState.videos.length > 0) && (
-                  <Button
-                    isIconOnly
-                    variant="light"
-                    color="danger"
-                    onPress={handleClearAll}
-                    title={chrome.i18n.getMessage('optionsClearAll')}>
-                    <TrashIcon className="w-5 h-5" />
-                  </Button>
-                )}
+                  formState.videos.length > 0 ||
+                  formState.tags.length > 0) && (
+                    <Button
+                      isIconOnly
+                      variant="light"
+                      color="danger"
+                      onPress={handleClearAll}
+                      title={chrome.i18n.getMessage('optionsClearAll')}>
+                      <TrashIcon className="w-5 h-5" />
+                    </Button>
+                  )}
               </div>
             </CardFooter>
           </Card>
@@ -484,12 +558,11 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
               <AccordionItem
                 key="CN"
                 title={chrome.i18n.getMessage('optionsCNPlatforms')}
-                subtitle={`${
-                  formState.selectedPlatforms.filter((platform) => {
-                    const info = platforms.find((p) => p.name === platform);
-                    return info?.tags?.includes('CN');
-                  }).length
-                }/${platforms.filter((platform) => platform.tags?.includes('CN')).length}`}
+                subtitle={`${formState.selectedPlatforms.filter((platform) => {
+                  const info = platforms.find((p) => p.name === platform);
+                  return info?.tags?.includes('CN');
+                }).length
+                  }/${platforms.filter((platform) => platform.tags?.includes('CN')).length}`}
                 startContent={
                   <div className="w-8">
                     <Icon
@@ -517,12 +590,11 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
               <AccordionItem
                 key="International"
                 title={chrome.i18n.getMessage('optionsInternationalPlatforms')}
-                subtitle={`${
-                  formState.selectedPlatforms.filter((platform) => {
-                    const info = platforms.find((p) => p.name === platform);
-                    return info?.tags?.includes('International');
-                  }).length
-                }/${platforms.filter((platform) => platform.tags?.includes('International')).length}`}
+                subtitle={`${formState.selectedPlatforms.filter((platform) => {
+                  const info = platforms.find((p) => p.name === platform);
+                  return info?.tags?.includes('International');
+                }).length
+                  }/${platforms.filter((platform) => platform.tags?.includes('International')).length}`}
                 startContent={
                   <div className="w-8">
                     <Icon

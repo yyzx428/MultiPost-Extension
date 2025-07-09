@@ -2,7 +2,8 @@ import type { DynamicData, SyncData } from '../common';
 
 // 优先发布图文
 export async function DynamicRednote(data: SyncData) {
-  const { title, content, images } = data.data as DynamicData;
+  const { title, content, images, tags } = data.data as DynamicData;
+
   // 辅助函数：等待元素出现
   function waitForElement(selector: string, timeout = 10000): Promise<Element> {
     return new Promise((resolve, reject) => {
@@ -30,6 +31,51 @@ export async function DynamicRednote(data: SyncData) {
         reject(new Error(`Element with selector "${selector}" not found within ${timeout}ms`));
       }, timeout);
     });
+  }
+
+  // 辅助函数：添加标签
+  async function addTags(editor: HTMLElement) {
+    if (!tags || tags.length === 0) {
+      console.log('没有标签需要添加');
+      return;
+    }
+
+    // 限制最多10个标签
+    const limitedTags = tags.slice(0, 10);
+    console.log('开始添加标签:', limitedTags);
+
+    for (let i = 0; i < limitedTags.length; i++) {
+      const tag = limitedTags[i];
+      console.log(`添加标签 ${i + 1}/${limitedTags.length}: #${tag}`);
+
+      // 确保编辑器有焦点
+      editor.focus();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // 添加#格式标签
+      const tagPasteEvent = new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: new DataTransfer(),
+      });
+      tagPasteEvent.clipboardData.setData('text/plain', ` #${tag}`);
+      editor.dispatchEvent(tagPasteEvent);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // 模拟回车键确认标签
+      const enterEvent = new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+      });
+      editor.dispatchEvent(enterEvent);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    console.log('标签添加完成');
   }
 
   // 辅助函数：上传文件
@@ -98,11 +144,24 @@ export async function DynamicRednote(data: SyncData) {
       titleInput.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
-    // 填写内容
+    // 填写内容和标签
     const contentEditor = (await waitForElement('div[contenteditable="true"]')) as HTMLDivElement;
     if (contentEditor) {
-      contentEditor.innerText = content;
+      // 先填写主要内容
+      contentEditor.focus();
+      const contentPasteEvent = new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: new DataTransfer(),
+      });
+      contentPasteEvent.clipboardData.setData('text/plain', content || '');
+      contentEditor.dispatchEvent(contentPasteEvent);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
       console.log('设置内容:', content);
+
+      // 添加标签
+      await addTags(contentEditor);
     }
 
     // 自动发布
