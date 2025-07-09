@@ -6,6 +6,7 @@ import { PodcastInfoMap } from './podcast';
 import { ShangPinMap } from './shangpin/shangpin';
 import { VideoInfoMap } from './video';
 import { YunPanMap } from './yunpan/yunpan';
+import '../types/window';
 
 export interface SyncDataPlatform {
   name: string;
@@ -216,65 +217,22 @@ export async function injectScriptsToTabs(
 
 
           // 注入包装的发布脚本
-          getPlatformInfo(platform.name).then((info) => {
+          getPlatformInfo(platform.name).then(async (info) => {
             if (info) {
-              // 如果有 traceId，使用包装函数添加监控
+              // 如果有 traceId，先注入监控逻辑，然后执行原函数
               if (data.traceId) {
-                chrome.scripting.executeScript({
+                // 先注入监控逻辑
+                await chrome.scripting.executeScript({
                   target: { tabId: tab.id },
-                  func: function (data, originalFuncStr, traceId, platformName) {
+                  func: function (traceId, platformName) {
                     /**
-                     * 简化包装函数 - 脚本执行完成后发送消息
-                     * @description 在原函数外层包装，执行完成后发送完成消息
+                     * 监控函数 - 符合CSP要求
+                     * @description 注入结果发送函数到全局作用域
                      */
+                    console.log(`[Monitor] 初始化监控: ${platformName}`);
 
-                    console.log(`[Wrapper] 开始执行发布: ${platformName}`);
-
-                    /**
-                     * 发送完成消息
-                     * @param {boolean} success - 是否成功执行
-                     * @param {string} errorMessage - 错误信息（可选）
-                     */
-                    function sendCompletionMessage(success, errorMessage = undefined) {
-                      const result = {
-                        traceId,
-                        platformName,
-                        success,
-                        publishUrl: window.location.href, // 使用当前页面URL
-                        errorMessage,
-                        timestamp: Date.now()
-                      };
-
-                      const message = {
-                        type: 'MULTIPOST_PUBLISH_RESULT',
-                        data: result
-                      };
-
-                      try {
-                        // 发送到窗口（保留原有功能）
-                        if (window.parent !== window) {
-                          window.parent.postMessage(message, '*');
-                        }
-                        if (window.opener) {
-                          window.opener.postMessage(message, '*');
-                        }
-                        window.postMessage(message, '*');
-
-                        // 发送到背景脚本进行聚合
-                        chrome.runtime.sendMessage({
-                          action: 'MUTLIPOST_EXTENSION_PUBLISH_RESULT',
-                          data: result
-                        });
-
-                        console.log(`[Wrapper] 执行完成消息已发送: ${platformName}`, result);
-                      } catch (error) {
-                        console.error('[Wrapper] 发送消息失败:', error);
-                      }
-                    }
-
-                    // 提供手动发送结果的函数（可选使用）
-                    (window as Window & { multipostSendResult?: (success: boolean, publishUrl: string, errorMessage?: string) => void }).multipostSendResult = function (success, publishUrl, errorMessage) {
-                      console.log(`[Wrapper] 收到手动发送结果调用`);
+                    // 发送发布结果的函数
+                    (window as typeof window & { multipostSendResult?: (success: boolean, publishUrl?: string, errorMessage?: string) => void }).multipostSendResult = function (success, publishUrl, errorMessage) {
                       const result = {
                         traceId,
                         platformName,
@@ -290,7 +248,7 @@ export async function injectScriptsToTabs(
                       };
 
                       try {
-                        // 发送到窗口（保留原有功能）
+                        // 发送到窗口
                         if (window.parent !== window) {
                           window.parent.postMessage(message, '*');
                         }
@@ -299,45 +257,51 @@ export async function injectScriptsToTabs(
                         }
                         window.postMessage(message, '*');
 
-                        // 发送到背景脚本进行聚合
+                        // 发送到背景脚本
                         chrome.runtime.sendMessage({
                           action: 'MUTLIPOST_EXTENSION_PUBLISH_RESULT',
                           data: result
                         });
 
-                        console.log(`[Wrapper] 手动发送结果已发送: ${platformName}`, result);
+                        console.log(`[Monitor] 结果已发送: ${platformName}`, result);
                       } catch (error) {
-                        console.error('[Wrapper] 发送结果失败:', error);
+                        console.error('[Monitor] 发送结果失败:', error);
                       }
                     };
 
-                    try {
-                      // 执行原始发布函数
-                      console.log(`[Wrapper] 执行原始发布函数...`);
-                      const originalFunc = new Function('data', `return (${originalFuncStr})(data);`);
-                      const result = originalFunc(data);
-
-                      console.log(`[Wrapper] 原始发布函数执行完成`);
-
-                      // 发送执行完成消息
-                      sendCompletionMessage(true);
-
-                      return result;
-
-                    } catch (error) {
-                      console.error(`[Wrapper] 原始发布函数执行出错:`, error);
-
-                      // 发送执行失败消息
-                      sendCompletionMessage(false, `执行错误: ${error.message}`);
-
-                      throw error;
-                    }
+                    // 保存平台信息供后续使用
+                    (window as typeof window & { multipostInfo?: { traceId: string; platformName: string; startTime: number } }).multipostInfo = {
+                      traceId,
+                      platformName,
+                      startTime: Date.now()
+                    };
                   },
-                  args: [data, info.injectFunction.toString(), data.traceId, platform.name]
+                  args: [data.traceId, platform.name]
+                });
+
+                // 然后执行原函数
+                await chrome.scripting.executeScript({
+                  target: { tabId: tab.id },
+                  func: info.injectFunction,
+                  args: [data],
+                });
+
+                // 最后发送完成消息（假设执行成功）
+                await chrome.scripting.executeScript({
+                  target: { tabId: tab.id },
+                  func: function () {
+                    // 延迟一秒后自动发送完成消息
+                    setTimeout(() => {
+                      if ((window as typeof window & { multipostSendResult?: (success: boolean, publishUrl?: string, errorMessage?: string) => void }).multipostSendResult) {
+                        console.log('[Monitor] 自动发送完成消息');
+                        (window as typeof window & { multipostSendResult?: (success: boolean, publishUrl?: string, errorMessage?: string) => void }).multipostSendResult(true, window.location.href);
+                      }
+                    }, 1000);
+                  }
                 });
               } else {
                 // 没有 traceId，直接注入原函数
-                chrome.scripting.executeScript({
+                await chrome.scripting.executeScript({
                   target: { tabId: tab.id },
                   func: info.injectFunction,
                   args: [data],

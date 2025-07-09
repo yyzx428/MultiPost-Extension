@@ -78,6 +78,7 @@ let currentPublishRequest: {
     timestamp: number;
   }>;
   timeoutId?: NodeJS.Timeout;
+  responceCallback?: (data: any) => void;
 } | null = null;
 
 const defaultMessageHandler = (request, sender, sendResponse) => {
@@ -101,7 +102,8 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
       timeoutId: setTimeout(() => {
         console.log('发布超时，发送已收到的结果');
         sendAggregatedResultsToOrigin();
-      }, 5 * 60 * 1000) // 5分钟超时
+      }, 5 * 60 * 1000), // 5分钟超时
+      responceCallback: sendResponse
     };
 
     (async () => {
@@ -222,10 +224,7 @@ async function sendAggregatedResultsToOrigin() {
   try {
     // 尝试向原始标签页发送消息
     if (currentPublishRequest.originTabId) {
-      await chrome.tabs.sendMessage(currentPublishRequest.originTabId, {
-        action: 'MUTLIPOST_EXTENSION_PUBLISH_COMPLETE',
-        data: aggregatedResult
-      });
+      currentPublishRequest.responceCallback?.(aggregatedResult);
       console.log('已向原始标签页发送聚合结果');
     }
   } catch (error) {
