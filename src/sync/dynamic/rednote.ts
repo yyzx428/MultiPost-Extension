@@ -4,8 +4,12 @@ import type { DynamicData, SyncData } from '../common';
 export async function DynamicRednote(data: SyncData) {
   const { title, content, images, tags, originalFlag, publishTime } = data.data as DynamicData;
 
-  // 辅助函数：等待元素出现
-  function waitForElement(selector: string, timeout = 10000): Promise<Element> {
+  //===================================
+  // 工具函数
+  //===================================
+
+  // 等待元素出现
+  async function waitForElement(selector: string, timeout = 10000): Promise<Element> {
     return new Promise((resolve, reject) => {
       const element = document.querySelector(selector);
       if (element) {
@@ -33,8 +37,12 @@ export async function DynamicRednote(data: SyncData) {
     });
   }
 
-  // 辅助函数：等待元素状态变化
-  function waitForElementCondition(selector: string, condition: (element: Element) => boolean, timeout = 10000): Promise<Element> {
+  // 等待元素状态变化
+  async function waitForElementCondition(
+    selector: string,
+    condition: (element: Element) => boolean,
+    timeout = 10000
+  ): Promise<Element> {
     return new Promise((resolve, reject) => {
       const element = document.querySelector(selector);
       if (element && condition(element)) {
@@ -62,43 +70,6 @@ export async function DynamicRednote(data: SyncData) {
         reject(new Error(`Element condition not met within ${timeout}ms`));
       }, timeout);
     });
-  }
-
-
-
-  // 辅助函数：处理定时发布
-  async function handleScheduledPublish(timeStr: string): Promise<boolean> {
-    try {
-      console.log('开始设置定时发布:', timeStr);
-
-      const { year, month, day, hour, minute } = parseDateTime(timeStr);
-      console.log('解析时间:', { year, month, day, hour, minute });
-
-      // 步骤1: 点击定时发布单选框
-      if (!await clickScheduledRadio()) return false;
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // 步骤2: 点击时间输入框打开选择器
-      if (!await clickTimeInput()) return false;
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // 步骤3: 在日历中选择日期
-      if (!await selectDate(day)) return false;
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      // 步骤4: 填写时间
-      if (!await fillTimeInputs(hour, minute)) return false;
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      // 步骤5: 确认选择
-      if (!await clickConfirmButton()) return false;
-
-      console.log('✅ 定时发布设置完成');
-      return true;
-    } catch (error) {
-      console.error('❌ 定时发布设置失败:', error);
-      return false;
-    }
   }
 
   // 解析时间字符串
@@ -130,6 +101,10 @@ export async function DynamicRednote(data: SyncData) {
       return false;
     }
   }
+
+  //===================================
+  // 定时发布相关函数
+  //===================================
 
   // 点击定时发布单选框
   async function clickScheduledRadio(): Promise<boolean> {
@@ -220,7 +195,46 @@ export async function DynamicRednote(data: SyncData) {
     return false;
   }
 
-  // 辅助函数：处理原创声明
+  // 处理定时发布
+  async function handleScheduledPublish(timeStr: string): Promise<boolean> {
+    try {
+      console.log('开始设置定时发布:', timeStr);
+
+      const { year, month, day, hour, minute } = parseDateTime(timeStr);
+      console.log('解析时间:', { year, month, day, hour, minute });
+
+      // 步骤1: 点击定时发布单选框
+      if (!await clickScheduledRadio()) return false;
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // 步骤2: 点击时间输入框打开选择器
+      if (!await clickTimeInput()) return false;
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // 步骤3: 在日历中选择日期
+      if (!await selectDate(day)) return false;
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // 步骤4: 填写时间
+      if (!await fillTimeInputs(hour, minute)) return false;
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // 步骤5: 确认选择
+      if (!await clickConfirmButton()) return false;
+
+      console.log('✅ 定时发布设置完成');
+      return true;
+    } catch (error) {
+      console.error('❌ 定时发布设置失败:', error);
+      return false;
+    }
+  }
+
+  //===================================
+  // 原创声明相关函数
+  //===================================
+
+  // 处理原创声明
   async function handleOriginalDeclaration(): Promise<void> {
     try {
       console.log('开始处理原创声明...');
@@ -348,7 +362,11 @@ export async function DynamicRednote(data: SyncData) {
     }
   }
 
-  // 辅助函数：添加标签
+  //===================================
+  // 内容处理相关函数
+  //===================================
+
+  // 添加标签
   async function addTags(editor: HTMLElement) {
     if (!tags || tags.length === 0) {
       console.log('没有标签需要添加');
@@ -393,7 +411,7 @@ export async function DynamicRednote(data: SyncData) {
     console.log('标签添加完成');
   }
 
-  // 辅助函数：上传文件
+  // 上传文件
   async function uploadImages() {
     const fileInput = (await waitForElement('input[type="file"]')) as HTMLInputElement;
     if (!fileInput) {
@@ -427,30 +445,8 @@ export async function DynamicRednote(data: SyncData) {
     }
   }
 
-  if (images && images.length > 0) {
-    // 等待页面加载
-    await waitForElement('span[class="title"]');
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // 点击上传图文按钮
-    const uploadButtons = document.querySelectorAll('span[class="title"]');
-    const uploadButton = Array.from(uploadButtons).find(
-      (element) => element.textContent?.includes('上传图文'),
-    ) as HTMLElement;
-
-    if (!uploadButton) {
-      console.error('未找到上传图文按钮');
-      return;
-    }
-
-    uploadButton.click();
-    uploadButton.dispatchEvent(new Event('click', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // 上传文件
-    await uploadImages();
-    await new Promise((resolve) => setTimeout(resolve, 5000)); // 等待图片上传完成
-
+  // 填写内容
+  async function fillContent() {
     // 填写标题
     const titleInput = (await waitForElement('input[type="text"]')) as HTMLInputElement;
     if (titleInput) {
@@ -478,6 +474,64 @@ export async function DynamicRednote(data: SyncData) {
       // 添加标签
       await addTags(contentEditor);
     }
+  }
+
+  //===================================
+  // 发布相关函数
+  //===================================
+
+  // 执行发布
+  async function publish() {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const buttons = document.querySelectorAll('button');
+    const publishButton = Array.from(buttons).find(
+      (button) => button.textContent?.includes('发布'),
+    ) as HTMLButtonElement;
+
+    if (publishButton) {
+      // 等待按钮可用
+      while (publishButton.getAttribute('aria-disabled') === 'true') {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        console.log('等待发布按钮可用...');
+      }
+
+      console.log('点击发布按钮');
+      publishButton.click();
+      await new Promise((resolve) => setTimeout(resolve, 10000));
+      window.location.href = 'https://creator.xiaohongshu.com/new/note-manager';
+    }
+  }
+
+  //===================================
+  // 主执行流程
+  //===================================
+
+  if (images && images.length > 0) {
+    // 等待页面加载
+    await waitForElement('span[class="title"]');
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // 点击上传图文按钮
+    const uploadButtons = document.querySelectorAll('span[class="title"]');
+    const uploadButton = Array.from(uploadButtons).find(
+      (element) => element.textContent?.includes('上传图文'),
+    ) as HTMLElement;
+
+    if (!uploadButton) {
+      console.error('未找到上传图文按钮');
+      return;
+    }
+
+    uploadButton.click();
+    uploadButton.dispatchEvent(new Event('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // 上传文件
+    await uploadImages();
+    await new Promise((resolve) => setTimeout(resolve, 5000)); // 等待图片上传完成
+
+    // 填写内容
+    await fillContent();
 
     // 处理定时发布
     if (publishTime) {
@@ -503,24 +557,7 @@ export async function DynamicRednote(data: SyncData) {
 
     // 自动发布
     if (data.isAutoPublish) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const buttons = document.querySelectorAll('button');
-      const publishButton = Array.from(buttons).find(
-        (button) => button.textContent?.includes('发布'),
-      ) as HTMLButtonElement;
-
-      if (publishButton) {
-        // 等待按钮可用
-        while (publishButton.getAttribute('aria-disabled') === 'true') {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          console.log('等待发布按钮可用...');
-        }
-
-        console.log('点击发布按钮');
-        publishButton.click();
-        await new Promise((resolve) => setTimeout(resolve, 10000));
-        window.location.href = 'https://creator.xiaohongshu.com/new/note-manager';
-      }
+      await publish();
     }
   }
 }
