@@ -109,6 +109,28 @@ export async function DynamicRednote(data: SyncData) {
     return { year, month, day, hour, minute };
   }
 
+  // 校验定时发布时间范围（1小时~14天内）
+  function isValidScheduleTime(timeStr: string): boolean {
+    try {
+      const now = new Date();
+      const target = new Date(timeStr.replace(/-/g, '/').replace(' ', 'T'));
+      const diffMs = target.getTime() - now.getTime();
+      const diffH = diffMs / (1000 * 60 * 60);
+
+      console.log('时间校验:', {
+        当前时间: now.toLocaleString(),
+        目标时间: timeStr,
+        时间差小时: diffH,
+        是否有效: diffH >= 1 && diffH <= 14 * 24
+      });
+
+      return diffH >= 1 && diffH <= 14 * 24;
+    } catch (error) {
+      console.error('时间校验失败:', error);
+      return false;
+    }
+  }
+
   // 点击定时发布单选框
   async function clickScheduledRadio(): Promise<boolean> {
     console.log('点击定时发布单选框...');
@@ -460,6 +482,13 @@ export async function DynamicRednote(data: SyncData) {
     // 处理定时发布
     if (publishTime) {
       console.log('检测到定时发布时间:', publishTime);
+
+      // 校验时间范围
+      if (!isValidScheduleTime(publishTime)) {
+        console.error('❌ 定时发布时间必须在1小时~14天内，跳过定时发布设置');
+        return;
+      }
+
       if (!await handleScheduledPublish(publishTime)) {
         console.error('定时发布设置失败');
         return;
