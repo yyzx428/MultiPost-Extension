@@ -42,6 +42,7 @@ interface FormState {
   selectedPlatforms: string[];
   autoPublish: boolean;
   originalFlag: boolean; // 原创声明标志
+  publishTime: string; // 定时发布时间，格式：YYYY-MM-DD HH:mm
 }
 
 const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
@@ -54,6 +55,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
     selectedPlatforms: [],
     autoPublish: false,
     originalFlag: false,
+    publishTime: '',
   });
 
   const [viewerState, setViewerState] = useState({
@@ -252,6 +254,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
         videos: formState.videos,
         tags: formState.tags,
         originalFlag: formState.originalFlag,
+        publishTime: formState.publishTime || undefined,
       },
       isAutoPublish: formState.autoPublish,
     };
@@ -291,6 +294,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
       selectedPlatforms: [],
       autoPublish: false,
       originalFlag: false,
+      publishTime: '',
     });
   }, []);
 
@@ -548,6 +552,23 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
                   size="sm">
                   原创声明
                 </Switch>
+
+                <div className="flex flex-col gap-2 mt-2">
+                  <label className="text-sm text-gray-600">定时发布时间（可选）</label>
+                  <input
+                    type="datetime-local"
+                    value={formState.publishTime ? formState.publishTime.replace(' ', 'T') : ''}
+                    onChange={(e) => setFormState((prev) => ({ ...prev, publishTime: e.target.value.replace('T', ' ') }))}
+                    className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min={new Date().toISOString().slice(0, 16)}
+                    placeholder="选择定时发布时间"
+                  />
+                  {formState.publishTime && (
+                    <p className="text-xs text-gray-500">
+                      将在 {formState.publishTime} 发布（仅支持小红书等平台）
+                    </p>
+                  )}
+                </div>
               </div>
 
               {formState.selectedPlatforms.length > 0 && (

@@ -33,6 +33,7 @@ export interface DynamicData {
   videos: FileData[];
   tags?: string[];
   originalFlag?: boolean; // 原创声明标志
+  publishTime?: string; // 定时发布时间，格式：YYYY-MM-DD HH:mm
 }
 
 export interface YunPanData {

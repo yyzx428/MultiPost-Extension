@@ -2,7 +2,7 @@ import type { DynamicData, SyncData } from '../common';
 
 // 优先发布图文
 export async function DynamicRednote(data: SyncData) {
-  const { title, content, images, tags, originalFlag } = data.data as DynamicData;
+  const { title, content, images, tags, originalFlag, publishTime } = data.data as DynamicData;
 
   // 辅助函数：等待元素出现
   function waitForElement(selector: string, timeout = 10000): Promise<Element> {
@@ -65,6 +65,138 @@ export async function DynamicRednote(data: SyncData) {
   }
 
 
+
+  // 辅助函数：处理定时发布
+  async function handleScheduledPublish(timeStr: string): Promise<boolean> {
+    try {
+      console.log('开始设置定时发布:', timeStr);
+
+      const { year, month, day, hour, minute } = parseDateTime(timeStr);
+      console.log('解析时间:', { year, month, day, hour, minute });
+
+      // 步骤1: 点击定时发布单选框
+      if (!await clickScheduledRadio()) return false;
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // 步骤2: 点击时间输入框打开选择器
+      if (!await clickTimeInput()) return false;
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // 步骤3: 在日历中选择日期
+      if (!await selectDate(day)) return false;
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // 步骤4: 填写时间
+      if (!await fillTimeInputs(hour, minute)) return false;
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // 步骤5: 确认选择
+      if (!await clickConfirmButton()) return false;
+
+      console.log('✅ 定时发布设置完成');
+      return true;
+    } catch (error) {
+      console.error('❌ 定时发布设置失败:', error);
+      return false;
+    }
+  }
+
+  // 解析时间字符串
+  function parseDateTime(timeStr: string) {
+    const [datePart, timePart] = timeStr.split(' ');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hour, minute] = timePart.split(':').map(Number);
+    return { year, month, day, hour, minute };
+  }
+
+  // 点击定时发布单选框
+  async function clickScheduledRadio(): Promise<boolean> {
+    console.log('点击定时发布单选框...');
+
+    const labels = document.querySelectorAll('label.el-radio');
+    for (const label of labels) {
+      const text = label.textContent?.trim();
+      if (text && text.includes('定时发布')) {
+        const input = label.querySelector('input.el-radio__original');
+        if (input) {
+          (input as HTMLElement).click();
+          console.log('✅ 定时发布单选框已点击');
+          return true;
+        }
+      }
+    }
+    console.warn('❌ 未找到定时发布单选框');
+    return false;
+  }
+
+  // 点击时间输入框
+  async function clickTimeInput(): Promise<boolean> {
+    console.log('点击时间输入框...');
+
+    const timeInput = document.querySelector('input.el-input__inner[placeholder*="日期"], input.el-input__inner[placeholder*="时间"]');
+    if (timeInput) {
+      (timeInput as HTMLElement).click();
+      console.log('✅ 时间输入框已点击');
+      return true;
+    }
+    console.warn('❌ 未找到时间输入框');
+    return false;
+  }
+
+  // 选择日期
+  async function selectDate(day: number): Promise<boolean> {
+    console.log(`选择日期 ${day}...`);
+
+    const availableCells = document.querySelectorAll('.el-date-table-cell');
+    for (const cell of availableCells) {
+      const span = cell.querySelector('.el-date-table-cell__text');
+      if (span && span.textContent?.trim() === day.toString()) {
+        const td = cell.closest('td');
+        if (td && td.classList.contains('available')) {
+          (td as HTMLElement).click();
+          console.log(`✅ 日期 ${day} 已选择`);
+          return true;
+        }
+      }
+    }
+    console.warn(`❌ 未找到可用日期 ${day}`);
+    return false;
+  }
+
+  // 填写时间
+  async function fillTimeInputs(hour: number, minute: number): Promise<boolean> {
+    console.log(`填写时间 ${hour}:${minute}...`);
+
+    const timeInput = document.querySelector('#el-id-2361-30, input[placeholder="选择时间"]');
+    if (timeInput) {
+      const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+      (timeInput as HTMLInputElement).focus();
+      (timeInput as HTMLInputElement).value = timeStr;
+      timeInput.dispatchEvent(new Event('input', { bubbles: true }));
+      timeInput.dispatchEvent(new Event('change', { bubbles: true }));
+      console.log(`✅ 时间已填写: ${timeStr}`);
+      return true;
+    }
+    console.warn('❌ 未找到时间输入字段');
+    return false;
+  }
+
+  // 点击确认按钮
+  async function clickConfirmButton(): Promise<boolean> {
+    console.log('点击确认按钮...');
+
+    const confirmButtons = document.querySelectorAll('button.el-button');
+    for (const button of confirmButtons) {
+      const span = button.querySelector('span');
+      if (span && span.textContent?.trim() === '确定') {
+        (button as HTMLElement).click();
+        console.log('✅ 确认按钮已点击');
+        return true;
+      }
+    }
+    console.warn('❌ 未找到确认按钮');
+    return false;
+  }
 
   // 辅助函数：处理原创声明
   async function handleOriginalDeclaration(): Promise<void> {
@@ -323,6 +455,15 @@ export async function DynamicRednote(data: SyncData) {
 
       // 添加标签
       await addTags(contentEditor);
+    }
+
+    // 处理定时发布
+    if (publishTime) {
+      console.log('检测到定时发布时间:', publishTime);
+      if (!await handleScheduledPublish(publishTime)) {
+        console.error('定时发布设置失败');
+        return;
+      }
     }
 
     // 处理原创声明
