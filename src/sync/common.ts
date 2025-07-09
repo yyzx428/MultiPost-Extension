@@ -214,8 +214,6 @@ export async function injectScriptsToTabs(
         if (tabId === tab.id && info.status === 'complete') {
           chrome.tabs.onUpdated.removeListener(listener);
 
-
-
           // 注入包装的发布脚本
           getPlatformInfo(platform.name).then(async (info) => {
             if (info) {
@@ -224,15 +222,19 @@ export async function injectScriptsToTabs(
                 // 先注入监控逻辑
                 await chrome.scripting.executeScript({
                   target: { tabId: tab.id },
-                  func: function (traceId, platformName) {
+                  func: function (traceId: string, platformName: string) {
                     /**
                      * 监控函数 - 符合CSP要求
-                     * @description 注入结果发送函数到全局作用域
+                     * @description 注入结果发送函数到全局作用域，避免复杂类型断言
                      */
                     console.log(`[Monitor] 初始化监控: ${platformName}`);
 
+                    // 使用简单的方式扩展 window 对象，避免复杂类型断言
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const win = window as any;
+
                     // 发送发布结果的函数
-                    (window as typeof window & { multipostSendResult?: (success: boolean, publishUrl?: string, errorMessage?: string) => void }).multipostSendResult = function (success, publishUrl, errorMessage) {
+                    win.multipostSendResult = function (success: boolean, publishUrl?: string, errorMessage?: string) {
                       const result = {
                         traceId,
                         platformName,
@@ -270,7 +272,7 @@ export async function injectScriptsToTabs(
                     };
 
                     // 保存平台信息供后续使用
-                    (window as typeof window & { multipostInfo?: { traceId: string; platformName: string; startTime: number } }).multipostInfo = {
+                    win.multipostInfo = {
                       traceId,
                       platformName,
                       startTime: Date.now()
@@ -290,11 +292,16 @@ export async function injectScriptsToTabs(
                 await chrome.scripting.executeScript({
                   target: { tabId: tab.id },
                   func: function () {
-                    // 延迟一秒后自动发送完成消息
+                    /**
+                     * 自动发送完成消息
+                     * @description 使用简单的方式避免 CSP 问题
+                     */
                     setTimeout(() => {
-                      if ((window as typeof window & { multipostSendResult?: (success: boolean, publishUrl?: string, errorMessage?: string) => void }).multipostSendResult) {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      const win = window as any;
+                      if (typeof win.multipostSendResult === 'function') {
                         console.log('[Monitor] 自动发送完成消息');
-                        (window as typeof window & { multipostSendResult?: (success: boolean, publishUrl?: string, errorMessage?: string) => void }).multipostSendResult(true, window.location.href);
+                        win.multipostSendResult(true, window.location.href);
                       }
                     }, 1000);
                   }
