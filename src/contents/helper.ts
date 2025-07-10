@@ -1,12 +1,12 @@
 /* eslint-disable prefer-const */
 
-export {};
+export { };
 import type { PlasmoCSConfig } from 'plasmo';
 import { handleBilibiliImageUpload } from './helper/bilibili';
 import { handleBlueskyVideoUpload, handleBlueskyImageUpload } from './helper/bluesky';
 
 export const config: PlasmoCSConfig = {
-  matches: ['https://t.bilibili.com/*', 'https://bsky.app/*', 'https://www.v2ex.com/write*', 'https://v2ex.com/write*'],
+  matches: ['https://t.bilibili.com/*', 'https://bsky.app/*', 'https://www.v2ex.com/write*', 'https://v2ex.com/write*', 'https://pan.baidu.com/*'],
   world: 'MAIN',
   run_at: 'document_start',
 };
@@ -47,3 +47,127 @@ function handleMessage(event: MessageEvent) {
 
 // 添加事件监听器
 window.addEventListener('message', handleMessage);
+
+//===================================
+// 文件操作功能集成
+//===================================
+
+// 仅在百度网盘页面加载文件操作功能
+if (window.location.hostname.includes('pan.baidu.com')) {
+
+  // 创建百度云分享函数
+  (window as any).createBaiduYunShare = async function (paths: string[] = [], options: any = {}) {
+    return new Promise((resolve, reject) => {
+      const requestId = `share-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      // 监听响应
+      const responseHandler = (event: MessageEvent) => {
+        if (event.data.type === 'response' &&
+          event.data.traceId === requestId &&
+          event.data.action === 'MUTLIPOST_EXTENSION_FILE_OPERATION') {
+
+          window.removeEventListener('message', responseHandler);
+
+          if (event.data.code === 0) {
+            resolve(event.data.data);
+          } else {
+            reject(new Error(event.data.message || '操作失败'));
+          }
+        }
+      };
+
+      window.addEventListener('message', responseHandler);
+
+      // 发送请求
+      window.postMessage({
+        type: 'request',
+        action: 'MUTLIPOST_EXTENSION_FILE_OPERATION',
+        traceId: requestId,
+        data: {
+          platform: 'baiduyun',
+          operation: 'share',
+          params: {
+            paths,
+            shareConfig: {
+              validPeriod: options.validPeriod || '7天',
+              extractCodeType: options.extractCodeType || '随机生成',
+              customCode: options.customCode
+            }
+          }
+        }
+      }, '*');
+
+      // 超时处理
+      setTimeout(() => {
+        window.removeEventListener('message', responseHandler);
+        reject(new Error('操作超时'));
+      }, 30000);
+    });
+  };
+
+  // 通用文件操作接口
+  (window as any).multipostExtension = {
+    fileOperation: async function (request: any) {
+      return new Promise((resolve, reject) => {
+        const requestId = `file-op-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+        // 监听响应
+        const responseHandler = (event: MessageEvent) => {
+          if (event.data.type === 'response' &&
+            event.data.traceId === requestId &&
+            event.data.action === 'MUTLIPOST_EXTENSION_FILE_OPERATION') {
+
+            window.removeEventListener('message', responseHandler);
+
+            if (event.data.code === 0) {
+              resolve(event.data.data);
+            } else {
+              reject(new Error(event.data.message || '操作失败'));
+            }
+          }
+        };
+
+        window.addEventListener('message', responseHandler);
+
+        // 发送请求
+        window.postMessage({
+          type: 'request',
+          action: 'MUTLIPOST_EXTENSION_FILE_OPERATION',
+          traceId: requestId,
+          data: request
+        }, '*');
+
+        // 超时处理
+        const timeout = request.params?.timeout || 30000;
+        setTimeout(() => {
+          window.removeEventListener('message', responseHandler);
+          reject(new Error(`操作超时 (${timeout}ms)`));
+        }, timeout);
+      });
+    }
+  };
+
+  // 调试工具
+  (window as any).multipostExtensionDebug = {
+    checkStatus: () => {
+      return {
+        fileOpsReady: true,
+        currentPlatform: window.location.hostname,
+        timestamp: new Date().toISOString()
+      };
+    },
+
+    testShare: async (paths = ['测试文件夹']) => {
+      try {
+        const result = await (window as any).createBaiduYunShare(paths);
+        console.log('测试结果:', result);
+        return result;
+      } catch (error) {
+        console.error('测试失败:', error);
+        throw error;
+      }
+    }
+  };
+
+  console.log('[MultiPost Extension] 百度云文件操作功能已就绪');
+}
