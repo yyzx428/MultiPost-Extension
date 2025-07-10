@@ -74,7 +74,9 @@ export async function DynamicRednote(data: SyncData) {
 
   // 解析时间字符串
   function parseDateTime(timeStr: string) {
-    const [datePart, timePart] = timeStr.split(' ');
+    // 统一时间格式，支持斜杠和横杠分隔的日期
+    const normalizedTimeStr = timeStr.replace(/\//g, '-');
+    const [datePart, timePart] = normalizedTimeStr.split(' ');
     const [year, month, day] = datePart.split('-').map(Number);
     const [hour, minute] = timePart.split(':').map(Number);
     return { year, month, day, hour, minute };
@@ -84,13 +86,17 @@ export async function DynamicRednote(data: SyncData) {
   function isValidScheduleTime(timeStr: string): boolean {
     try {
       const now = new Date();
-      const target = new Date(timeStr.replace(/-/g, '/').replace(' ', 'T'));
+      // 统一时间格式，支持斜杠和横杠分隔的日期
+      const normalizedTimeStr = timeStr.replace(/\//g, '-');
+      const target = new Date(normalizedTimeStr);
       const diffMs = target.getTime() - now.getTime();
       const diffH = diffMs / (1000 * 60 * 60);
 
       console.log('时间校验:', {
         当前时间: now.toLocaleString(),
         目标时间: timeStr,
+        标准化时间: normalizedTimeStr,
+        解析后时间: target.toLocaleString(),
         时间差小时: diffH,
         是否有效: diffH >= 1 && diffH <= 14 * 24
       });
