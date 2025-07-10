@@ -88,7 +88,20 @@ export async function DynamicRednote(data: SyncData) {
       const now = new Date();
       // 统一时间格式，支持斜杠和横杠分隔的日期
       const normalizedTimeStr = timeStr.replace(/\//g, '-');
-      const target = new Date(normalizedTimeStr);
+
+      // 确保格式为 ISO 标准格式，添加 T 分隔符
+      const isoTimeStr = normalizedTimeStr.includes('T')
+        ? normalizedTimeStr
+        : normalizedTimeStr.replace(' ', 'T');
+
+      const target = new Date(isoTimeStr);
+
+      // 检查日期是否有效
+      if (isNaN(target.getTime())) {
+        console.error('无效的日期格式:', timeStr, '标准化后:', isoTimeStr);
+        return false;
+      }
+
       const diffMs = target.getTime() - now.getTime();
       const diffH = diffMs / (1000 * 60 * 60);
 
@@ -96,7 +109,9 @@ export async function DynamicRednote(data: SyncData) {
         当前时间: now.toLocaleString(),
         目标时间: timeStr,
         标准化时间: normalizedTimeStr,
+        ISO格式: isoTimeStr,
         解析后时间: target.toLocaleString(),
+        时间差毫秒: diffMs,
         时间差小时: diffH,
         是否有效: diffH >= 1 && diffH <= 14 * 24
       });
