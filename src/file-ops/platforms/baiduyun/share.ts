@@ -120,7 +120,31 @@ export class BaiduYunShareHandler {
      * 选择全部文件
      */
     private async selectAllFiles(): Promise<void> {
-        // 查找全选复选框
+        // 首先尝试通过点击文件行来选择
+        const fileRows = document.querySelectorAll('.wp-s-pan-table__body-row, .wp-s-table-skin-hoc__tr, .mouse-choose-item');
+
+        if (fileRows.length > 0) {
+            // 点击第一个文件行来选择
+            const firstFile = fileRows[0] as HTMLElement;
+            firstFile.click();
+
+            // 触发点击事件
+            firstFile.dispatchEvent(new MouseEvent('click', {
+                bubbles: true,
+                cancelable: true,
+                view: window
+            }));
+
+            await this.waiter.sleep(1000); // 等待界面更新
+
+            // 检查是否有文件被选中
+            const selected = document.querySelectorAll('.selected, [class*="selected"]');
+            if (selected.length > 0) {
+                return; // 选择成功
+            }
+        }
+
+        // 如果文件行点击失败，尝试查找全选复选框
         const selectAllCheckbox = await this.findSelectAllCheckbox();
 
         if (selectAllCheckbox) {
@@ -154,7 +178,22 @@ export class BaiduYunShareHandler {
             return false;
         }
 
-        // 查找复选框
+        // 首先尝试点击文件行本身
+        (fileRow as HTMLElement).click();
+        (fileRow as HTMLElement).dispatchEvent(new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            view: window
+        }));
+
+        await this.waiter.sleep(500);
+
+        // 检查是否被选中
+        if (fileRow.classList.contains('selected') || fileRow.querySelector('.selected')) {
+            return true;
+        }
+
+        // 如果点击文件行失败，尝试查找复选框
         const checkbox = fileRow.querySelector('input[type="checkbox"]') as HTMLInputElement;
         if (checkbox && !checkbox.checked) {
             checkbox.click();
@@ -198,6 +237,13 @@ export class BaiduYunShareHandler {
      * @returns 文件行元素或null
      */
     private async findFileRowByName(fileName: string): Promise<Element | null> {
+        // 首先查找百度云表格行
+        const tableRows = document.querySelectorAll('.wp-s-pan-table__body-row, .wp-s-table-skin-hoc__tr');
+        for (const row of tableRows) {
+            if (row.textContent?.includes(fileName)) {
+                return row;
+            }
+        }
         // 查找包含指定文件名的行
         const rows = document.querySelectorAll('tr, .file-item, .list-item');
 
@@ -217,56 +263,233 @@ export class BaiduYunShareHandler {
      * 点击分享按钮
      */
     private async clickShareButton(): Promise<void> {
+        // 首先尝试查找直接可见的分享按钮
         const shareButton = await this.findShareButton();
 
         if (!shareButton) {
             throw new Error('找不到分享按钮');
         }
 
+        // 点击分享按钮
         shareButton.click();
-        shareButton.dispatchEvent(new Event('click', { bubbles: true }));
 
-        await this.waiter.sleep(1000);
+        // 触发额外的事件以确保点击生效
+        shareButton.dispatchEvent(new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            view: window
+        }));
+
+        await this.waiter.sleep(1500); // 给更多时间让分享弹窗出现
+    }
+
+    /**
+ * 通过右键菜单触发分享
+ */
+    private async triggerShareFromContextMenu(): Promise<HTMLElement | null> {
+        try {
+            // 查找已选中的文件
+            let selectedFiles = document.querySelectorAll('.selected, [class*="selected"]');
+
+            if (selectedFiles.length === 0) {
+                // 如果没有选中文件，尝试选中第一个文件
+                const fileSelectors = [
+                    '.wp-s-pan-table__body-row', // 百度云表格文件行
+                    '.wp-s-table-skin-hoc__tr', // 百度云表格行
+                    '.mouse-choose-item', // 可选择的项目
+                    '.wp-s-file-main-item', // 百度云文件项
+                    '.list-item', // 列表项
+                    '.grid-item', // 网格项
+                    '.file-item', // 文件项
+                    'tr[class*="row"]', // 表格行
+                    '[class*="file"]', // 包含file的类名
+                    '[class*="item"]' // 包含item的类名
+                ];
+
+                let firstFile = null;
+                for (const selector of fileSelectors) {
+                    firstFile = document.querySelector(selector);
+                    if (firstFile) break;
+                }
+
+                if (firstFile) {
+                    (firstFile as HTMLElement).click();
+                    await this.waiter.sleep(500);
+
+                    // 重新查找选中的文件
+                    selectedFiles = document.querySelectorAll('.selected, [class*="selected"]');
+                }
+            }
+
+            // 查找可以右键点击的文件元素
+            const targetElements = selectedFiles.length > 0 ? selectedFiles :
+                document.querySelectorAll('.wp-s-pan-table__body-row, .wp-s-table-skin-hoc__tr, .mouse-choose-item, .wp-s-file-main-item, .list-item, .grid-item, .file-item');
+
+            for (const fileElement of targetElements) {
+                // 确保元素可见
+                if ((fileElement as HTMLElement).offsetParent === null) {
+                    continue;
+                }
+
+                // 获取元素的位置信息
+                const rect = fileElement.getBoundingClientRect();
+
+                // 触发右键菜单
+                const contextMenuEvent = new MouseEvent('contextmenu', {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    button: 2,
+                    clientX: rect.left + rect.width / 2,
+                    clientY: rect.top + rect.height / 2
+                });
+
+                fileElement.dispatchEvent(contextMenuEvent);
+                await this.waiter.sleep(1500); // 给更多时间让菜单出现
+
+                // 查找右键菜单中的分享选项
+                const shareMenuItem = await this.findShareButtonInContextMenu();
+                if (shareMenuItem) {
+                    return shareMenuItem;
+                }
+
+                // 如果没有找到，关闭菜单继续尝试下一个元素
+                document.body.click(); // 点击其他地方关闭菜单
+                await this.waiter.sleep(300);
+            }
+
+            return null;
+        } catch {
+            console.log('右键菜单触发分享失败:');
+            return null;
+        }
     }
 
     /**
      * 查找分享按钮 - 更新为最新的百度网盘界面
      */
     private async findShareButton(): Promise<HTMLElement | null> {
-        // 新界面的分享按钮选择器
-        const selectors = [
+        // 首先尝试查找工具栏中的分享按钮（基于实际HTML结构）
+        const toolbarSelectors = [
+            '.wp-s-agile-tool-bar__h-action-button[title="分享"]', // 最新的工具栏分享按钮
+            'button[title="分享"]', // 通用分享按钮（通过title匹配）
+            '.wp-s-agile-tool-bar button:has(.u-icon-share)', // 包含分享图标的工具栏按钮
+            '.u-button[title="分享"]', // UI库按钮
             '[data-button-id="b5"]', // 旧版本选择器
             'button[data-type="share"]', // 通用分享按钮
             '.toolbar-button[data-type="share"]', // 工具栏分享按钮
-            'button:contains("分享")', // 包含"分享"文字的按钮
-            '.nd-file-list-toolbar button[title*="分享"]' // 标题包含分享的按钮
+            '.nd-file-list-toolbar button[title*="分享"]', // 标题包含分享的按钮
+            '.wp-s-agile-tool-bar button[title*="分享"]', // 新版工具栏分享按钮
+            'button[aria-label*="分享"]' // aria-label包含分享的按钮
         ];
 
-        for (const selector of selectors) {
+        for (const selector of toolbarSelectors) {
             try {
-                const button = await this.waiter.waitForElement(selector, 2000) as HTMLElement;
-                if (button && button.offsetParent !== null) { // 确保按钮可见
-                    return button;
+                // 对于 :has 选择器，需要手动处理
+                if (selector.includes(':has')) {
+                    const buttons = document.querySelectorAll('.wp-s-agile-tool-bar button');
+                    for (const button of buttons) {
+                        const icon = button.querySelector('.u-icon-share');
+                        if (icon && (button as HTMLElement).offsetParent !== null) {
+                            return button as HTMLElement;
+                        }
+                    }
+                } else {
+                    const button = await this.waiter.waitForElement(selector, 1000) as HTMLElement;
+                    if (button && button.offsetParent !== null) { // 确保按钮可见
+                        return button;
+                    }
                 }
-            } catch (error) {
+            } catch {
                 // 继续尝试下一个选择器
             }
         }
 
-        // 如果都找不到，尝试通过文本查找
+        // 如果工具栏没有找到，通过文本查找
         try {
-            const buttons = document.querySelectorAll('button, [role="button"]');
-            for (const button of buttons) {
-                if (button.textContent?.includes('分享') &&
+            const allButtons = document.querySelectorAll('.wp-s-agile-tool-bar button, .u-button');
+            for (const button of allButtons) {
+                const title = button.getAttribute('title');
+                const text = button.textContent?.trim();
+
+                if ((title === '分享' || text?.includes('分享')) &&
                     (button as HTMLElement).offsetParent !== null) {
                     return button as HTMLElement;
                 }
             }
-        } catch (error) {
-            console.log('文本查找分享按钮失败:', error);
+        } catch {
+            console.log('文本查找分享按钮失败:');
         }
 
-        return null;
+        // 如果工具栏没有找到，尝试右键菜单方式
+        return await this.findShareButtonInContextMenu();
+    }
+
+    /**
+     * 在右键菜单中查找分享按钮
+     */
+    private async findShareButtonInContextMenu(): Promise<HTMLElement | null> {
+        try {
+            // 查找百度云右键菜单中的分享选项 - 基于实际DOM结构
+            const contextMenuSelectors = [
+                '.wp-s-ctx-menu__item .wp-s-ctx-menu__item-text:contains("分享")', // 分享文本
+                '.wp-s-ctx-menu__item:has(.u-icon-share)', // 包含分享图标的菜单项
+                '.wp-s-ctx-menu__item:has(.wp-s-ctx-menu__item-text:contains("分享"))', // 包含分享文本的菜单项
+                '.ctx-menu-container .wp-s-ctx-menu__item:contains("分享")', // 完整右键菜单容器
+                '.wp-s-ctx-menu .wp-s-ctx-menu__item', // 所有右键菜单项（需要文本匹配）
+                '.context-menu .menu-item:contains("分享")', // 通用菜单项
+                '.right-menu .menu-item:contains("分享")', // 右键菜单项
+                '[role="menuitem"]:contains("分享")' // ARIA菜单项
+            ];
+
+            // 首先尝试精确选择器
+            for (const selector of contextMenuSelectors.slice(0, 4)) {
+                try {
+                    // 对于 :contains 和 :has 选择器，需要手动查找
+                    if (selector.includes(':contains') || selector.includes(':has')) {
+                        const elements = document.querySelectorAll(selector.split(':')[0]);
+                        for (const element of elements) {
+                            if (element.textContent?.includes('分享') &&
+                                (element as HTMLElement).offsetParent !== null) {
+                                return element as HTMLElement;
+                            }
+                        }
+                    } else {
+                        const menuItem = document.querySelector(selector) as HTMLElement;
+                        if (menuItem && menuItem.offsetParent !== null) {
+                            return menuItem;
+                        }
+                    }
+                } catch {
+                    // 继续尝试下一个选择器
+                }
+            }
+
+            // 如果精确选择器没找到，遍历所有右键菜单项
+            const allMenuItems = document.querySelectorAll('.wp-s-ctx-menu__item, .menu-item, [role="menuitem"]');
+            for (const item of allMenuItems) {
+                const textElement = item.querySelector('.wp-s-ctx-menu__item-text, .menu-text');
+                const text = textElement?.textContent?.trim() || item.textContent?.trim();
+
+                if (text === '分享' && (item as HTMLElement).offsetParent !== null) {
+                    return item as HTMLElement;
+                }
+            }
+
+            // 最后尝试通过图标查找分享按钮
+            const shareIconItems = document.querySelectorAll('.u-icon-share');
+            for (const icon of shareIconItems) {
+                const menuItem = icon.closest('.wp-s-ctx-menu__item, .menu-item');
+                if (menuItem && (menuItem as HTMLElement).offsetParent !== null) {
+                    return menuItem as HTMLElement;
+                }
+            }
+
+            return null;
+        } catch {
+            console.log('右键菜单查找分享按钮失败:');
+            return null;
+        }
     }
 
     /**
@@ -288,7 +511,7 @@ export class BaiduYunShareHandler {
                     (button.textContent?.includes('复制链接') || button.textContent?.includes('复制'))) {
                     return button;
                 }
-            } catch (error) {
+            } catch {
                 // 继续尝试下一个选择器
             }
         }
