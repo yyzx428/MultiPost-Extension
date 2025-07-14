@@ -234,7 +234,7 @@ async function sendAggregatedResultsToOrigin() {
   // 清理当前发布请求状态
   currentPublishRequest = null;
 }
-starter(1000);
+starter(1000 * 10);
 // Message Handler || 消息处理器 || END
 
 // Keep Alive || 保活机制 || START
