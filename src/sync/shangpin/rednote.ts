@@ -67,6 +67,44 @@ export async function ShangpinRednote(data: SyncData) {
         label.children[0].dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }))
     }
 
+    /**
+     * 等待按钮可点击的辅助函数
+     * @param button 要检查的按钮元素
+     * @param timeout 超时时间（毫秒）
+     * @returns Promise<boolean> 按钮是否可点击
+     */
+    async function waitForButtonClickable(button: HTMLElement, timeout = 10000): Promise<boolean> {
+        return new Promise((resolve) => {
+            const startTime = Date.now();
+
+            const checkButton = () => {
+                // 检查按钮是否可见且未被禁用
+                const isVisible = button.offsetParent !== null;
+                const isDisabled = button.hasAttribute('disabled') ||
+                    button.classList.contains('disabled') ||
+                    button.style.pointerEvents === 'none';
+                const isClickable = !isDisabled && isVisible;
+
+                if (isClickable) {
+                    resolve(true);
+                    return;
+                }
+
+                // 检查是否超时
+                if (Date.now() - startTime > timeout) {
+                    console.log('按钮等待超时，尝试强制点击');
+                    resolve(false);
+                    return;
+                }
+
+                // 继续检查
+                setTimeout(checkButton, 100);
+            };
+
+            checkButton();
+        });
+    }
+
     async function processImageError() {
         await new Promise((resolve) => setTimeout(resolve, 3000));
         const images = document.querySelectorAll('div[class="upload-trigger"]');
@@ -94,8 +132,17 @@ export async function ShangpinRednote(data: SyncData) {
                 return false;
             }
 
+            // 等待确认按钮可点击
+            const isClickable = await waitForButtonClickable(confirmButton, 10000);
+            if (!isClickable) {
+                console.log('确认按钮不可点击，尝试强制点击');
+            }
+
             confirmButton.click();
             confirmButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+            // 等待点击操作完成
+            await new Promise((resolve) => setTimeout(resolve, 1000));
         }
         return true;
     }
