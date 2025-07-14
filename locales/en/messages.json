@@ -1024,5 +1024,8 @@
   },
   "platformBaiduYun": {
     "message": "Baidu yun pan"
+  },
+  "platformAgiso": {
+    "message": "Agiso"
   }
 }

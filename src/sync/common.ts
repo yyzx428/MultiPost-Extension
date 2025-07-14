@@ -67,9 +67,10 @@ export interface ArticleData {
 
 export interface ShangPinData {
   title: string;
-  prize: string;
-  num: string;
-  files: FileData[];
+  prize?: string;
+  num?: string;
+  files?: FileData[];
+  useInfo?: string;
 }
 
 export interface VideoData {

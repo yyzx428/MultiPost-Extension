@@ -1,5 +1,6 @@
 import type { PlatformInfo } from "~sync/common";
 import { ShangpinRednote } from "./rednote";
+import { ShangpinAgiso } from "./agiso";
 
 export const ShangPinMap: Record<string, PlatformInfo> = {
     SHANGPIN_REDNOTE: {
@@ -12,5 +13,16 @@ export const ShangPinMap: Record<string, PlatformInfo> = {
         injectFunction: ShangpinRednote,
         tags: ['CN'],
         accountKey: 'rednote',
+    },
+    SHANGPIN_AGISO: {
+        type: 'SHANGPIN',
+        name: 'SHANGPIN_AGISO',
+        homeUrl: 'https://aldsxhs.agiso.com',
+        faviconUrl: 'https://aldsxhs.agiso.com/favicon.ico',
+        platformName: chrome.i18n.getMessage('platformAgiso'),
+        injectUrl: 'https://aldsxhs.agiso.com/#/alds/goods',
+        injectFunction: ShangpinAgiso,
+        tags: ['CN'],
+        accountKey: 'agiso',
     }
 };

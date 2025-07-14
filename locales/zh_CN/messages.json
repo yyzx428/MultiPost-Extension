@@ -998,5 +998,8 @@
   },
   "platformBaiduYun": {
     "message": "百度云盘"
+  },
+  "platformAgiso": {
+    "message": "阿奇索"
   }
 }
