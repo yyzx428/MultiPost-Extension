@@ -519,7 +519,7 @@ export async function DynamicRednote(data: SyncData) {
       console.log('点击发布按钮');
       publishButton.click();
       await new Promise((resolve) => setTimeout(resolve, 10000));
-      window.location.href = 'https://creator.xiaohongshu.com/new/note-manager';
+      // window.location.href = 'https://creator.xiaohongshu.com/new/note-manager';
     }
   }
 
