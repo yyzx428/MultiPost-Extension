@@ -743,12 +743,34 @@ export class BaiduYunShareHandler {
         // 提取有效期信息
         const validUntil = await this.extractValidPeriod();
 
+        // 构建完整的分享文本
+        const shareText = this.buildShareText(shareUrl, extractCode);
+
         return {
             shareUrl,
             extractCode,
             validUntil,
+            shareText, // 添加格式化的分享文本
             createdAt: new Date().toISOString()
         };
+    }
+
+    /**
+     * 构建分享文本
+     * @param shareUrl 分享链接
+     * @param extractCode 提取码
+     * @returns 格式化的分享文本
+     */
+    private buildShareText(shareUrl: string, extractCode?: string): string {
+        let text = `通过网盘分享的文件：\n链接: ${shareUrl}`;
+
+        if (extractCode) {
+            text += `\n提取码: ${extractCode}`;
+        }
+
+        text += '\n复制这段内容后打开百度网盘手机App，操作更方便哦';
+
+        return text;
     }
 
     /**
@@ -760,24 +782,38 @@ export class BaiduYunShareHandler {
             '.share-url-input',
             'input[readonly][value*="pan.baidu.com"]',
             '.share-link',
-            '.url-display'
+            '.url-display',
+            '.share-url',
+            '.link-result'
         ];
 
         for (const selector of urlSelectors) {
             const element = document.querySelector(selector) as HTMLInputElement;
             if (element && element.value) {
-                return element.value;
+                // 确保链接包含完整的URL（可能包含?pwd=参数）
+                const url = element.value.trim();
+                if (url.includes('pan.baidu.com/s/')) {
+                    return url;
+                }
             }
         }
 
-        // 尝试从文本中提取
-        const textElements = document.querySelectorAll('.share-result *');
+        // 尝试从文本中提取完整的分享链接
+        const textElements = document.querySelectorAll('.share-result *, .share-dialog *, .modal *');
         for (const element of textElements) {
             const text = element.textContent || '';
-            const urlMatch = text.match(/https:\/\/pan\.baidu\.com\/s\/\w+/);
+            // 匹配完整的分享链接，包括可能的?pwd=参数
+            const urlMatch = text.match(/https:\/\/pan\.baidu\.com\/s\/[a-zA-Z0-9]+(?:\?pwd=[a-zA-Z0-9]+)?/);
             if (urlMatch) {
                 return urlMatch[0];
             }
+        }
+
+        // 如果还是找不到，尝试从整个页面文本中提取
+        const fullText = document.body.textContent || '';
+        const urlMatch = fullText.match(/https:\/\/pan\.baidu\.com\/s\/[a-zA-Z0-9]+(?:\?pwd=[a-zA-Z0-9]+)?/);
+        if (urlMatch) {
+            return urlMatch[0];
         }
 
         throw new Error('无法提取分享链接');
@@ -791,24 +827,49 @@ export class BaiduYunShareHandler {
         const codeSelectors = [
             '.extract-code-display',
             '.code-display',
-            '[data-field="code"]'
+            '[data-field="code"]',
+            '.share-code',
+            '.pwd-display'
         ];
 
         for (const selector of codeSelectors) {
             const element = document.querySelector(selector);
             if (element && element.textContent) {
-                return element.textContent.trim();
+                const code = element.textContent.trim();
+                // 验证提取码格式（通常是4位字母数字组合）
+                if (/^[a-zA-Z0-9]{4}$/.test(code)) {
+                    return code;
+                }
             }
         }
 
-        // 尝试从文本中提取
-        const textElements = document.querySelectorAll('.share-result *');
+        // 尝试从文本中提取提取码
+        const textElements = document.querySelectorAll('.share-result *, .share-dialog *, .modal *');
         for (const element of textElements) {
             const text = element.textContent || '';
-            const codeMatch = text.match(/提取码[：:]\s*([a-zA-Z0-9]+)/);
+            // 匹配多种提取码格式
+            const codeMatch = text.match(/提取码[：:]\s*([a-zA-Z0-9]{4})/);
             if (codeMatch) {
                 return codeMatch[1];
             }
+
+            // 匹配 pwd= 参数中的提取码
+            const pwdMatch = text.match(/pwd=([a-zA-Z0-9]{4})/);
+            if (pwdMatch) {
+                return pwdMatch[1];
+            }
+        }
+
+        // 如果还是找不到，尝试从整个页面文本中提取
+        const fullText = document.body.textContent || '';
+        const codeMatch = fullText.match(/提取码[：:]\s*([a-zA-Z0-9]{4})/);
+        if (codeMatch) {
+            return codeMatch[1];
+        }
+
+        const pwdMatch = fullText.match(/pwd=([a-zA-Z0-9]{4})/);
+        if (pwdMatch) {
+            return pwdMatch[1];
         }
 
         return undefined;

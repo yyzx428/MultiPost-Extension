@@ -104,6 +104,8 @@ export interface ShareResult {
     validUntil: string;
     /** 创建时间 */
     createdAt: string;
+    /** 格式化的分享文本 */
+    shareText?: string;
     /** 分享的文件列表 */
     sharedFiles: FileItem[];
 }
