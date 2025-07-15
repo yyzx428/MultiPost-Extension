@@ -123,7 +123,7 @@ export class ChainActionExecutor {
                 this.addLog(`分享创建成功，链接: ${shareResult.shareUrl}`);
                 return shareResult;
             } else {
-                throw new Error(result.logs?.[0]?.message || '分享操作失败');
+                throw new Error(result.error || '分享操作失败');
             }
         } catch (error) {
             throw new Error(`百度云分享失败: ${typeof error === 'object' && error && 'message' in error && typeof (error as { message: unknown }).message === 'string' ? (error as { message: string }).message : String(error)}`);
