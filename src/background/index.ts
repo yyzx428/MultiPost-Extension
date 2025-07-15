@@ -81,6 +81,13 @@ let currentPublishRequest: {
   responceCallback?: (data: any) => void;
 } | null = null;
 
+// 新增：链式操作相关状态
+let currentChainActionData: {
+  action: string;
+  config: Record<string, unknown>;
+  traceId?: string;
+} | null = null;
+
 const defaultMessageHandler = (request, sender, sendResponse) => {
   if (request.action === 'MUTLIPOST_EXTENSION_CHECK_SERVICE_STATUS') {
     sendResponse({ extensionId: chrome.runtime.id });
@@ -198,6 +205,29 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
         }
       })();
     }
+  }
+
+  // 新增：链式操作相关消息处理
+  if (request.action === 'MUTLIPOST_EXTENSION_CHAIN_ACTION') {
+    const chainActionData = {
+      action: request.data.action,
+      config: request.data.config,
+      traceId: request.traceId
+    };
+    currentChainActionData = chainActionData;
+
+    (async () => {
+      await chrome.windows.create({
+        url: chrome.runtime.getURL(`tabs/chain-action.html`),
+        type: 'popup',
+        width: 800,
+        height: 600,
+      });
+    })();
+  }
+
+  if (request.action === 'MUTLIPOST_EXTENSION_CHAIN_ACTION_REQUEST_DATA') {
+    sendResponse({ config: currentChainActionData });
   }
 };
 

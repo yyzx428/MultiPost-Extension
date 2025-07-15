@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>链式操作测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        .config-display {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>链式操作测试页面</h1>
+    
+    <div class="test-section">
+        <h2>测试百度云 + Agiso 链式操作</h2>
+        <p>点击按钮启动链式操作弹窗，弹窗会自动执行操作</p>
+        
+        <h3>当前配置：</h3>
+        <div class="config-display" id="configDisplay">
+            // 配置将在这里显示
+        </div>
+        
+        <button onclick="testChainAction()">启动链式操作弹窗</button>
+        <button onclick="testChainActionWithCustomConfig()">使用自定义配置启动</button>
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        // 默认配置
+        const defaultConfig = {
+            action: 'baidu-agiso',
+            config: {
+                baiduShare: {
+                    paths: ['我的手抄报', '054'],
+                    shareConfig: {
+                        shareType: 'link',
+                        expireType: 'forever',
+                        pwd: '1234'
+                    }
+                },
+                agisoProduct: {
+                    title: '测试商品标题',
+                    useInfo: '这是一个测试商品的使用说明'
+                }
+            }
+        };
+
+        // 自定义配置
+        const customConfig = {
+            action: 'baidu-agiso',
+            config: {
+                baiduShare: {
+                    paths: ['文档', '重要文件'],
+                    shareConfig: {
+                        shareType: 'link',
+                        expireType: '7days',
+                        pwd: '5678'
+                    }
+                },
+                agisoProduct: {
+                    title: '自定义商品标题',
+                    useInfo: '这是自定义配置的商品使用说明，包含详细的下载和使用指南。'
+                }
+            }
+        };
+
+        // 显示配置
+        function displayConfig(config) {
+            const configDisplay = document.getElementById('configDisplay');
+            configDisplay.textContent = JSON.stringify(config, null, 2);
+        }
+
+        // 初始化显示默认配置
+        displayConfig(defaultConfig);
+
+        function testChainAction() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = '正在启动链式操作弹窗...';
+
+            // 发送消息给扩展，启动链式操作弹窗
+            chrome.runtime.sendMessage({
+                action: 'MUTLIPOST_EXTENSION_CHAIN_ACTION',
+                data: defaultConfig,
+                traceId: `test-${Date.now()}`
+            }, (response) => {
+                if (chrome.runtime.lastError) {
+                    resultDiv.textContent = '错误: ' + chrome.runtime.lastError.message;
+                } else {
+                    resultDiv.textContent = '链式操作弹窗已启动，将自动执行操作';
+                }
+            });
+        }
+
+        function testChainActionWithCustomConfig() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = '正在启动链式操作弹窗（自定义配置）...';
+
+            // 显示自定义配置
+            displayConfig(customConfig);
+
+            // 发送消息给扩展，启动链式操作弹窗
+            chrome.runtime.sendMessage({
+                action: 'MUTLIPOST_EXTENSION_CHAIN_ACTION',
+                data: customConfig,
+                traceId: `test-custom-${Date.now()}`
+            }, (response) => {
+                if (chrome.runtime.lastError) {
+                    resultDiv.textContent = '错误: ' + chrome.runtime.lastError.message;
+                } else {
+                    resultDiv.textContent = '链式操作弹窗已启动（自定义配置），将自动执行操作';
+                }
+            });
+        }
+
+        // 监听来自扩展的消息
+        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            console.log('收到消息:', message);
+            if (message.traceId && message.traceId.startsWith('test-')) {
+                const resultDiv = document.getElementById('result');
+                resultDiv.textContent = '收到结果: ' + JSON.stringify(message, null, 2);
+            }
+        });
+
+        // 页面加载时显示说明
+        window.addEventListener('load', () => {
+            console.log('链式操作测试页面已加载');
+            console.log('使用说明：');
+            console.log('1. 点击"启动链式操作弹窗"按钮');
+            console.log('2. 弹窗会自动打开并开始执行链式操作');
+            console.log('3. 无需用户手动点击执行按钮');
+            console.log('4. 执行完成后会自动关闭（如果启用了自动关闭）');
+        });
+    </script>
+</body>
+</html> 
