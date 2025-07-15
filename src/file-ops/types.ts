@@ -88,6 +88,8 @@ export interface FileSelectionConfig {
     selectByType?: 'files' | 'folders' | 'all';
     /** 按模式匹配选择 */
     selectByPattern?: string;
+    /** 按文件夹选择 */
+    selectByFolder?: string[];
 }
 
 /** 分享结果 */

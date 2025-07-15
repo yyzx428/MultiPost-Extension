@@ -113,6 +113,18 @@ export class BaiduYunShareHandler {
             }
         }
 
+        if (selection.selectByFolder && selection.selectByFolder.length > 0) {
+            // 按文件夹选择
+            const folderFiles = currentFiles.filter(f => f.type === 'folder');
+            for (const folderName of selection.selectByFolder) {
+                const folder = folderFiles.find(f => f.name === folderName);
+                if (folder) {
+                    await this.selectFileByName(folder.name);
+                    selectedFiles.push(folder);
+                }
+            }
+        }
+
         return selectedFiles;
     }
 

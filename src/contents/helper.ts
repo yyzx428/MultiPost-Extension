@@ -42,11 +42,74 @@ function handleMessage(event: MessageEvent) {
     if (editor) {
       editor.CodeMirror.setValue(data.content);
     }
+  } else if (data.type === 'request' && data.action === 'MUTLIPOST_EXTENSION_FILE_OPERATION') {
+    // 处理文件操作请求
+    handleFileOperationRequest(data);
   }
 }
 
 // 添加事件监听器
 window.addEventListener('message', handleMessage);
+
+/**
+ * 处理文件操作请求
+ * @param data 请求数据
+ */
+async function handleFileOperationRequest(data: {
+  type: string;
+  action: string;
+  traceId: string;
+  data: {
+    platform: string;
+    operation: string;
+    params: { paths: string[]; shareConfig: { validPeriod: string; extractCodeType: string; customCode?: string } };
+  };
+}) {
+  try {
+    console.log('[Helper] 收到文件操作请求:', data);
+
+    // 检查是否在百度网盘页面
+    if (!window.location.hostname.includes('pan.baidu.com')) {
+      throw new Error('当前页面不支持文件操作');
+    }
+
+    // 根据操作类型调用相应的函数
+    if (data.data.platform === 'baiduyun' && data.data.operation === 'share') {
+      const result = await (window as unknown as { createBaiduYunShare: (paths: string[], options: { validPeriod: string; extractCodeType: string; customCode?: string }) => Promise<unknown> }).createBaiduYunShare(
+        data.data.params.paths,
+        data.data.params.shareConfig
+      );
+
+      // 发送成功响应
+      window.postMessage({
+        type: 'response',
+        action: 'MUTLIPOST_EXTENSION_FILE_OPERATION',
+        traceId: data.traceId,
+        code: 0,
+        data: result
+      }, '*');
+    } else {
+      throw new Error(`不支持的操作: ${data.data.platform}.${data.data.operation}`);
+    }
+  } catch (error) {
+    console.error('[Helper] 文件操作失败:', error);
+
+    // 发送错误响应
+    let msg = '未知错误';
+    if (typeof error === 'object' && error && 'message' in error && typeof (error as { message: unknown }).message === 'string') {
+      msg = (error as { message: string }).message;
+    } else if (typeof error === 'string') {
+      msg = error;
+    }
+    window.postMessage({
+      type: 'response',
+      action: 'MUTLIPOST_EXTENSION_FILE_OPERATION',
+      traceId: data.traceId,
+      code: 1,
+      message: msg
+    }, '*');
+  }
+}
 
 //===================================
 // 文件操作功能集成
@@ -56,7 +119,7 @@ window.addEventListener('message', handleMessage);
 if (window.location.hostname.includes('pan.baidu.com')) {
 
   // 创建百度云分享函数
-  (window as any).createBaiduYunShare = async function (paths: string[] = [], options: any = {}) {
+  (window as unknown as { createBaiduYunShare: (paths: string[], options: { validPeriod: string; extractCodeType: string; customCode?: string }) => Promise<unknown> }).createBaiduYunShare = async function (paths: string[] = [], options: { validPeriod?: string; extractCodeType?: string; customCode?: string } = {}) {
     return new Promise((resolve, reject) => {
       const requestId = `share-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -106,8 +169,8 @@ if (window.location.hostname.includes('pan.baidu.com')) {
   };
 
   // 通用文件操作接口
-  (window as any).multipostExtension = {
-    fileOperation: async function (request: any) {
+  (window as unknown as { multipostExtension: { fileOperation: (request: unknown) => Promise<unknown> } }).multipostExtension = {
+    fileOperation: async function (request: unknown) {
       return new Promise((resolve, reject) => {
         const requestId = `file-op-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -138,7 +201,7 @@ if (window.location.hostname.includes('pan.baidu.com')) {
         }, '*');
 
         // 超时处理
-        const timeout = request.params?.timeout || 30000;
+        const timeout = (request as { params?: { timeout?: number } }).params?.timeout || 30000;
         setTimeout(() => {
           window.removeEventListener('message', responseHandler);
           reject(new Error(`操作超时 (${timeout}ms)`));
@@ -148,7 +211,7 @@ if (window.location.hostname.includes('pan.baidu.com')) {
   };
 
   // 调试工具
-  (window as any).multipostExtensionDebug = {
+  (window as unknown as { multipostExtensionDebug: { checkStatus: () => { fileOpsReady: boolean; currentPlatform: string; timestamp: string }; testShare: (paths: string[]) => Promise<unknown> } }).multipostExtensionDebug = {
     checkStatus: () => {
       return {
         fileOpsReady: true,
@@ -159,7 +222,7 @@ if (window.location.hostname.includes('pan.baidu.com')) {
 
     testShare: async (paths = ['测试文件夹']) => {
       try {
-        const result = await (window as any).createBaiduYunShare(paths);
+        const result = await (window as unknown as { createBaiduYunShare: (paths: string[]) => Promise<unknown> }).createBaiduYunShare(paths);
         console.log('测试结果:', result);
         return result;
       } catch (error) {

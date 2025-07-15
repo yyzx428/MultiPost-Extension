@@ -83,13 +83,13 @@ interface ChainActionState {
 //===================================
 
 // 聚焦到主窗口的函数
-const focusMainWindow = async () => {
-    const windows = await chrome.windows.getAll();
-    const mainWindow = windows.find((window) => window.type === 'normal');
-    if (mainWindow?.id) {
-        await chrome.windows.update(mainWindow.id, { focused: true });
-    }
-};
+// const focusMainWindow = async () => {
+//     const windows = await chrome.windows.getAll();
+//     const mainWindow = windows.find((window) => window.type === 'normal');
+//     if (mainWindow?.id) {
+//         await chrome.windows.update(mainWindow.id, { focused: true });
+//     }
+// };
 
 const getTitleFromConfig = (config: ChainActionConfig | null, availableActions: ChainActionBase[]) => {
     if (!config) return '链式操作';
@@ -151,6 +151,20 @@ export default function ChainActionModal() {
         };
     }, [state.isExecuting, state.result, autoClose]);
 
+    // 监听配置数据变化，自动执行链式操作
+    useEffect(() => {
+        if (state.config && !state.isExecuting && state.steps.length > 0) {
+            console.log('配置数据已设置，准备自动执行链式操作');
+            // 延迟1秒执行，让用户看到界面
+            const timer = setTimeout(() => {
+                console.log('自动执行链式操作');
+                executeChainActionWithTabManagement();
+            }, 1000);
+
+            return () => clearTimeout(timer);
+        }
+    }, [state.config, state.isExecuting, state.steps.length]);
+
     const loadAvailableActions = async () => {
         try {
             const actions = getAvailableChainActions();
@@ -166,17 +180,20 @@ export default function ChainActionModal() {
             { action: 'MUTLIPOST_EXTENSION_CHAIN_ACTION_REQUEST_DATA' },
             (response) => {
                 console.log('收到链式操作配置:', response);
+                console.log('response?.config 存在:', !!response?.config);
                 if (response?.config) {
-                    setState(prev => ({
-                        ...prev,
-                        config: response.config
-                    }));
+                    console.log('设置配置数据:', response.config);
+                    setState(prev => {
+                        console.log('setState 回调，prev.config:', prev.config);
+                        return {
+                            ...prev,
+                            config: response.config
+                        };
+                    });
                     initializeSteps(response.config.action);
 
-                    // 自动开始执行链式操作
-                    setTimeout(() => {
-                        executeChainAction();
-                    }, 1000); // 延迟1秒开始执行，让用户看到界面
+                    // 自动开始执行链式操作 - 使用 useEffect 监听状态变化
+                    // 移除 setTimeout，改为在 useEffect 中处理
                 } else {
                     addLog('❌ 未获取到链式操作配置数据');
                 }
@@ -300,7 +317,8 @@ export default function ChainActionModal() {
     // 执行链式操作
     //===================================
 
-    const executeChainAction = async () => {
+    const executeChainActionWithTabManagement = async () => {
+        console.log('executeChainActionWithTabManagement 被调用，当前 state.config:', state.config);
         if (!state.config) {
             addLog('❌ 配置数据为空');
             return;
@@ -309,8 +327,7 @@ export default function ChainActionModal() {
         setState(prev => ({
             ...prev,
             isExecuting: true,
-            error: null,
-            logs: []
+            error: null
         }));
 
         addLog('🚀 开始执行链式操作: ' + state.config.action);
@@ -319,18 +336,66 @@ export default function ChainActionModal() {
             // 更新步骤状态
             updateStepStatus(0, 'running', '正在执行...');
 
+            // 重新组织配置数据结构以匹配 ChainActionConfig 接口
+            const config = state.config.config as {
+                baiduShare: {
+                    paths: string[];
+                    shareConfig: Record<string, unknown>;
+                };
+                agisoProduct: { title: string; useInfo: string };
+            };
+
+            const chainActionConfig = {
+                baiduShare: {
+                    paths: config.baiduShare.paths,
+                    shareConfig: config.baiduShare.shareConfig,
+                },
+                agisoProduct: config.agisoProduct
+            };
+
+            // 执行链式操作
             const result = await executeChainActionByName(
                 state.config.action,
-                state.config.config
+                chainActionConfig
             );
 
             // 更新步骤状态
             const resultData = result as { success: boolean; error?: string };
             if (resultData.success) {
-                updateStepStatus(0, 'success', '执行成功');
-                if (state.steps.length > 1) {
-                    updateStepStatus(1, 'success', '执行成功');
+                updateStepStatus(0, 'success', '百度云分享完成');
+
+                // 如果链式操作成功，直接发送阿奇索发布消息
+                addLog('📤 准备发送阿奇索商品发布消息...');
+                updateStepStatus(1, 'running', '正在发布到阿奇索...');
+
+                try {
+                    // 构建商品数据
+                    const shangpinData = {
+                        title: config.agisoProduct.title,
+                        useInfo: config.agisoProduct.useInfo
+                    };
+
+                    // 构建同步数据
+                    const syncData = {
+                        platforms: [{ name: 'SHANGPIN_AGISO' }],
+                        data: shangpinData,
+                        isAutoPublish: true
+                    };
+
+                    // 发送发布消息
+                    await chrome.runtime.sendMessage({
+                        action: 'MUTLIPOST_EXTENSION_PUBLISH',
+                        data: syncData,
+                        traceId: `chain-action-${Date.now()}`
+                    });
+
+                    updateStepStatus(1, 'success', '阿奇索发布请求已发送');
+                    addLog('✅ 阿奇索商品发布消息已发送');
+                } catch (error) {
+                    updateStepStatus(1, 'error', '阿奇索发布失败');
+                    addLog('❌ 阿奇索发布失败: ' + error.message);
                 }
+
                 addLog('✅ 链式操作执行成功');
             } else {
                 updateStepStatus(0, 'error', resultData.error || '执行失败');
@@ -342,11 +407,6 @@ export default function ChainActionModal() {
                 result: result as Record<string, unknown>,
                 isExecuting: false
             }));
-
-            // 执行完成后聚焦到主窗口
-            setTimeout(async () => {
-                await focusMainWindow();
-            }, 1000);
 
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -387,7 +447,7 @@ export default function ChainActionModal() {
             error: null,
             result: null
         }));
-        executeChainAction();
+        executeChainActionWithTabManagement();
     };
 
     //===================================
@@ -565,6 +625,7 @@ export default function ChainActionModal() {
                                             value={Math.floor(autoCloseDelay / 60)}
                                             onChange={(e) => handleDelayChange(e)}
                                             className="w-14"
+                                            aria-label="自动关闭延迟时间（分钟）"
                                         />
                                         <span className="text-xs text-gray-500">min</span>
                                     </div>
