@@ -119,12 +119,16 @@ export default function ChainActionModal() {
     const autoCloseTimerRef = useRef<NodeJS.Timeout>();
     const countdownTimerRef = useRef<NodeJS.Timeout>();
     const logsEndRef = useRef<HTMLDivElement>(null);
+    const hasExecutedRef = useRef<boolean>(false);
 
     //===================================
     // 初始化
     //===================================
 
     useEffect(() => {
+        // 重置执行标志
+        hasExecutedRef.current = false;
+
         // 加载自动关闭设置
         loadAutoCloseSettings();
 
@@ -153,11 +157,12 @@ export default function ChainActionModal() {
 
     // 监听配置数据变化，自动执行链式操作
     useEffect(() => {
-        if (state.config && !state.isExecuting && state.steps.length > 0) {
+        if (state.config && !state.isExecuting && state.steps.length > 0 && !hasExecutedRef.current) {
             console.log('配置数据已设置，准备自动执行链式操作');
             // 延迟1秒执行，让用户看到界面
             const timer = setTimeout(() => {
                 console.log('自动执行链式操作');
+                hasExecutedRef.current = true;
                 executeChainActionWithTabManagement();
             }, 1000);
 
@@ -360,45 +365,22 @@ export default function ChainActionModal() {
             );
 
             // 更新步骤状态
-            const resultData = result as { success: boolean; error?: string };
+            const resultData = result as { success: boolean; error?: string; baiduShareResult?: unknown; agisoPublishResult?: unknown };
             if (resultData.success) {
                 updateStepStatus(0, 'success', '百度云分享完成');
-
-                // 如果链式操作成功，直接发送阿奇索发布消息
-                addLog('📤 准备发送阿奇索商品发布消息...');
-                updateStepStatus(1, 'running', '正在发布到阿奇索...');
-
-                try {
-                    // 构建商品数据
-                    const shangpinData = {
-                        title: config.agisoProduct.title,
-                        useInfo: config.agisoProduct.useInfo
-                    };
-
-                    // 构建同步数据
-                    const syncData = {
-                        platforms: [{ name: 'SHANGPIN_AGISO' }],
-                        data: shangpinData,
-                        isAutoPublish: true
-                    };
-
-                    // 发送发布消息
-                    await chrome.runtime.sendMessage({
-                        action: 'MUTLIPOST_EXTENSION_PUBLISH',
-                        data: syncData,
-                        traceId: `chain-action-${Date.now()}`
-                    });
-
-                    updateStepStatus(1, 'success', '阿奇索发布请求已发送');
-                    addLog('✅ 阿奇索商品发布消息已发送');
-                } catch (error) {
-                    updateStepStatus(1, 'error', '阿奇索发布失败');
-                    addLog('❌ 阿奇索发布失败: ' + error.message);
-                }
-
+                updateStepStatus(1, 'success', '阿奇索发布完成');
                 addLog('✅ 链式操作执行成功');
+
+                // 记录详细结果
+                if (resultData.baiduShareResult) {
+                    addLog('📋 百度云分享结果: ' + JSON.stringify(resultData.baiduShareResult));
+                }
+                if (resultData.agisoPublishResult) {
+                    addLog('📋 阿奇索发布结果: ' + JSON.stringify(resultData.agisoPublishResult));
+                }
             } else {
                 updateStepStatus(0, 'error', resultData.error || '执行失败');
+                updateStepStatus(1, 'error', '发布失败');
                 addLog('❌ 链式操作执行失败: ' + (resultData.error || '未知错误'));
             }
 
@@ -436,19 +418,7 @@ export default function ChainActionModal() {
         }));
     };
 
-    //===================================
-    // 重试功能
-    //===================================
 
-    const retryExecution = () => {
-        setState(prev => ({
-            ...prev,
-            steps: prev.steps.map(step => ({ ...step, status: 'waiting' })),
-            error: null,
-            result: null
-        }));
-        executeChainActionWithTabManagement();
-    };
 
     //===================================
     // 关闭弹窗
@@ -642,18 +612,7 @@ export default function ChainActionModal() {
                         </div>
                     </div>
 
-                    {/* 操作按钮 - 只在错误时显示重试，其他时候隐藏 */}
-                    {state.error && (
-                        <Button
-                            color="primary"
-                            variant="flat"
-                            startContent={<RefreshCw className="w-4 h-4" />}
-                            onClick={retryExecution}
-                            className="w-full">
-                            重试
-                        </Button>
-                    )}
-
+                    {/* 操作按钮 */}
                     {!state.isExecuting && (
                         <Button
                             color="danger"
