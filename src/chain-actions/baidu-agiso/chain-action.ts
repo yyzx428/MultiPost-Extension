@@ -109,6 +109,7 @@ export class ChainActionExecutor {
             this.addLog('百度网盘页面加载完成');
 
             // 在标签页中注入并执行 file-ops 接口
+            this.addLog('开始执行百度云分享操作...');
             const result = await this.executeFileOpsInTab(baiduTab.id!, {
                 platform: 'baiduyun',
                 operation: 'share',
@@ -117,6 +118,7 @@ export class ChainActionExecutor {
                     shareConfig: baiduConfig.shareConfig
                 }
             });
+            this.addLog('百度云分享操作执行完成');
 
             if (result.success && result.data) {
                 const shareResult = result.data as ShareResult;
@@ -303,9 +305,13 @@ export class ChainActionExecutor {
                     };
                     function executeBaiduYunShare(params: { paths: string[]; shareConfig: { validPeriod: string; extractCodeType: string; customCode?: string } }) {
                         console.log('[ChainAction] 执行百度云分享操作:', params);
-                        setTimeout(async () => {
+
+                        // 立即执行，不使用setTimeout
+                        (async () => {
                             try {
+                                console.log('[ChainAction] 开始调用helper接口...');
                                 const result = await callHelperInterface(params);
+                                console.log('[ChainAction] helper接口调用成功:', result);
                                 window['multipostSendFileOpsResult'](true, result);
                             } catch (error: unknown) {
                                 console.error('[ChainAction] 百度云分享失败:', error);
@@ -317,7 +323,7 @@ export class ChainActionExecutor {
                                 }
                                 window['multipostSendFileOpsResult'](false, null, msg);
                             }
-                        }, 2000);
+                        })();
                     }
                     function callHelperInterface(params: { paths: string[]; shareConfig: { validPeriod: string; extractCodeType: string; customCode?: string } }): Promise<unknown> {
                         return new Promise((resolve, reject) => {
@@ -369,8 +375,8 @@ export class ChainActionExecutor {
                 chrome.runtime.onMessage.addListener(messageListener);
                 setTimeout(() => {
                     chrome.runtime.onMessage.removeListener(messageListener);
-                    reject(new Error('file-ops操作超时'));
-                }, 60000);
+                    reject(new Error('file-ops操作超时 (60秒)'));
+                }, 120000); // 增加到120秒超时
             }).catch(reject);
         });
     }
