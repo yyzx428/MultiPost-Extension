@@ -32,14 +32,14 @@ export class BaiduYunShareHandler {
             await this.clickShareButton();
 
             // 第3步：等待分享弹窗出现
-            await this.waitForShareDialog();
+            const shareDialog = await this.waitForShareDialog();
 
             // 第4步：配置分享参数
-            await this.configureShareSettings(config);
+            await this.configureShareSettings(shareDialog, config);
 
             // 第5步：创建分享链接
-            const shareResult = await this.createShareLink();
-
+            const shareResult = await this.createShareLink(shareDialog);
+            console.log('shareResult', shareResult);
             // 第6步：获取分享结果
             return {
                 ...shareResult,
@@ -114,12 +114,9 @@ export class BaiduYunShareHandler {
         }
 
         if (selection.selectByFolder && selection.selectByFolder.length > 0) {
-            // 按文件夹选择
-            const folderFiles = currentFiles.filter(f => f.type === 'folder');
             for (const folderName of selection.selectByFolder) {
-                const folder = folderFiles.find(f => f.name === folderName);
+                const folder = currentFiles.find(f => f.name === folderName);
                 if (folder) {
-                    console.log('选择文件夹:', folder.name);
                     await this.selectFileByName(folder.name);
                     selectedFiles.push(folder);
                 }
@@ -259,7 +256,7 @@ export class BaiduYunShareHandler {
         }
         // 查找包含指定文件名的行
         const rows = document.querySelectorAll('tr, .file-item, .list-item');
-
+        console.log('查找文件行:', rows);
         for (const row of rows) {
             const nameElement = row.querySelector('a[title], .file-name, .name');
             const name = nameElement?.getAttribute('title') || nameElement?.textContent?.trim();
@@ -292,8 +289,6 @@ export class BaiduYunShareHandler {
             cancelable: true,
             view: window
         }));
-
-        await this.waiter.sleep(1500); // 给更多时间让分享弹窗出现
     }
 
     /**
@@ -535,23 +530,18 @@ export class BaiduYunShareHandler {
     /**
      * 等待分享弹窗出现
      */
-    private async waitForShareDialog(): Promise<void> {
-        const dialogSelectors = [
-            '.share-dialog',
-            '.modal',
-            '.popup',
-            '[role="dialog"]',
-            '.dialog-container'
-        ];
+    private async waitForShareDialog(): Promise<HTMLElement> {
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
-        for (const selector of dialogSelectors) {
-            const dialog = await this.waiter.waitForElement(selector, 5000);
-            if (dialog) {
-                await this.waiter.sleep(1000);
-                return;
-            }
+        const dialogs = document.querySelectorAll('div[role="dialog"]');
+        const dialog = Array.from(dialogs).find(dialog => {
+            return dialog.textContent?.includes('分享文件');
+        });
+        if (dialog) {
+            console.log('分享弹窗:', dialog);
+            return dialog as HTMLElement;
         }
-
+        console.log('分享弹窗未出现');
         throw new Error('分享弹窗未出现');
     }
 
@@ -559,15 +549,14 @@ export class BaiduYunShareHandler {
      * 配置分享设置
      * @param config 分享配置
      */
-    private async configureShareSettings(config: ShareConfig): Promise<void> {
+    private async configureShareSettings(shareDialog: HTMLElement,
+        config: ShareConfig): Promise<void> {
         // 选择链接分享方式
-        await this.selectLinkShareMode();
+        await this.selectLinkShareMode(shareDialog, config);
 
         // 设置有效期
-        await this.setValidPeriod(config.validPeriod);
+        await this.setValidPeriod(shareDialog, config.validPeriod);
 
-        // 设置提取码
-        await this.setExtractCode(config.extractCodeType, config.customCode);
 
         // 设置用户信息隐藏
         if (config.hideUserInfo) {
@@ -578,47 +567,52 @@ export class BaiduYunShareHandler {
     /**
      * 选择链接分享方式
      */
-    private async selectLinkShareMode(): Promise<void> {
-        const linkShareSelectors = [
-            '.link-share-tab',
-            'input[value="link"]',
-            '[data-share-type="link"]',
-            'button:contains("链接分享")'
-        ];
-
-        for (const selector of linkShareSelectors) {
-            const element = await this.waiter.waitForElement(selector, 2000);
-            if (element) {
-                (element as HTMLElement).click();
-                await this.waiter.sleep(500);
-                return;
-            }
+    private async selectLinkShareMode(shareDialog: HTMLElement, config: ShareConfig): Promise<void> {
+        const linkShareSelectors = shareDialog.querySelectorAll('div[class="u-form-item"]');
+        const linkShareItem = Array.from(linkShareSelectors).find(item => {
+            return item.textContent?.includes('提取码');
+        });
+        if (!linkShareItem) {
+            console.log('找不到提取码');
+            return;
         }
+        const radioItems = linkShareItem.querySelectorAll('label[role="radio"]');
+        const radioItem = Array.from(radioItems).find(item => {
+            return item.textContent?.includes(config.extractCodeType);
+        }) as HTMLElement;
+        if (!radioItem) {
+            console.log(config.extractCodeType + '找不到提取码');
+            return;
+        }
+        radioItem.click();
+        radioItem.dispatchEvent(new Event('click', { bubbles: true }));
     }
 
     /**
      * 设置有效期
      * @param period 有效期
      */
-    private async setValidPeriod(period: string): Promise<void> {
-        // 查找有效期选择控件
-        const periodSelectors = [
-            '.valid-period-select',
-            '.period-select',
-            'select[name*="period"]',
-            '[data-field="period"]'
-        ];
-
-        for (const selector of periodSelectors) {
-            const element = await this.waiter.waitForElement(selector, 2000);
-            if (element) {
-                await this.selectOptionByText(element as HTMLSelectElement, period);
-                return;
-            }
+    private async setValidPeriod(shareDialog: HTMLElement, period: string): Promise<void> {
+        const linkShareSelectors = shareDialog.querySelectorAll('div[class="u-form-item"]');
+        const validPeriodItem = Array.from(linkShareSelectors).find(item => {
+            return item.textContent?.includes('有效期');
+        });
+        if (!validPeriodItem) {
+            console.log('找不到有效期');
+            return;
         }
+        const radioItems = validPeriodItem.querySelectorAll('label[role="radio"]');
+        const radioItem = Array.from(radioItems).find(item => {
+            return item.textContent?.includes(period);
+        }) as HTMLElement;
+        if (!radioItem) {
+            console.log(period + '找不到有效期');
+            return;
+        }
+        radioItem.click();
+        radioItem.dispatchEvent(new Event('click', { bubbles: true }));
 
-        // 尝试通过单选按钮设置
-        await this.selectRadioByText(period);
+
     }
 
     /**
@@ -627,8 +621,7 @@ export class BaiduYunShareHandler {
      * @param customCode 自定义提取码
      */
     private async setExtractCode(codeType: string, customCode?: string): Promise<void> {
-        // 选择提取码类型
-        await this.selectRadioByText(codeType);
+
 
         // 如果是自定义提取码，填写自定义码
         if (codeType === '自定义' && customCode) {
@@ -663,18 +656,17 @@ export class BaiduYunShareHandler {
      * 创建分享链接
      * @returns 分享结果
      */
-    private async createShareLink(): Promise<Omit<ShareResult, 'sharedFiles'>> {
+    private async createShareLink(shareDialog: HTMLElement): Promise<Omit<ShareResult, 'sharedFiles'>> {
         // 点击创建链接按钮
-        const createButton = await this.findCreateLinkButton();
+        const createButton = await this.findCreateLinkButton(shareDialog);
         if (!createButton) {
-            throw new Error('找不到创建链接按钮');
+            console.log('找不到创建链接按钮');
+            return null;
         }
 
         createButton.click();
-        createButton.dispatchEvent(new Event('click', { bubbles: true }));
 
-        // 等待分享结果出现
-        await this.waitForShareResult();
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
         // 提取分享信息
         return await this.extractShareInfo();
@@ -684,28 +676,16 @@ export class BaiduYunShareHandler {
      * 查找创建链接按钮
      * @returns 创建链接按钮或null
      */
-    private async findCreateLinkButton(): Promise<HTMLElement | null> {
-        const strategies = [
-            () => document.querySelector('.create-link-btn'),
-            () => document.querySelector('button[type="submit"]'),
-            () => {
-                const buttons = Array.from(document.querySelectorAll('button'));
-                return buttons.find(btn =>
-                    btn.textContent?.includes('创建') ||
-                    btn.textContent?.includes('确定') ||
-                    btn.textContent?.includes('生成')
-                );
-            }
-        ];
-
-        for (const strategy of strategies) {
-            const element = strategy();
-            if (element) {
-                return element as HTMLElement;
-            }
+    private async findCreateLinkButton(shareDialog: HTMLElement): Promise<HTMLElement | null> {
+        const createButtons = shareDialog.querySelectorAll('button[type="button"]');
+        const createButton = Array.from(createButtons).find(item => {
+            return item.textContent?.includes('复制链接');
+        }) as HTMLElement;
+        if (!createButton) {
+            console.log('找不到创建链接按钮');
+            return null;
         }
-
-        return null;
+        return createButton;
     }
 
     /**
@@ -735,22 +715,22 @@ export class BaiduYunShareHandler {
      * @returns 分享信息
      */
     private async extractShareInfo(): Promise<Omit<ShareResult, 'sharedFiles'>> {
+
+        const shareText = document.querySelector('div[class="copy-link-text"]')?.textContent;
+        if (!shareText) {
+            console.log('找不到分享链接');
+            return null;
+        }
+
         // 提取分享链接
-        const shareUrl = await this.extractShareUrl();
+        const shareUrl = await this.extractShareUrl(shareText);
 
         // 提取提取码
-        const extractCode = await this.extractCode();
-
-        // 提取有效期信息
-        const validUntil = await this.extractValidPeriod();
-
-        // 构建完整的分享文本
-        const shareText = this.buildShareText(shareUrl, extractCode);
+        const extractCode = await this.extractCode(shareText);
 
         return {
             shareUrl,
             extractCode,
-            validUntil,
             shareText, // 添加格式化的分享文本
             createdAt: new Date().toISOString()
         };
@@ -778,45 +758,11 @@ export class BaiduYunShareHandler {
      * 提取分享链接
      * @returns 分享链接
      */
-    private async extractShareUrl(): Promise<string> {
-        const urlSelectors = [
-            '.share-url-input',
-            'input[readonly][value*="pan.baidu.com"]',
-            '.share-link',
-            '.url-display',
-            '.share-url',
-            '.link-result'
-        ];
-
-        for (const selector of urlSelectors) {
-            const element = document.querySelector(selector) as HTMLInputElement;
-            if (element && element.value) {
-                // 确保链接包含完整的URL（可能包含?pwd=参数）
-                const url = element.value.trim();
-                if (url.includes('pan.baidu.com/s/')) {
-                    return url;
-                }
-            }
-        }
-
-        // 尝试从文本中提取完整的分享链接
-        const textElements = document.querySelectorAll('.share-result *, .share-dialog *, .modal *');
-        for (const element of textElements) {
-            const text = element.textContent || '';
-            // 匹配完整的分享链接，包括可能的?pwd=参数
-            const urlMatch = text.match(/https:\/\/pan\.baidu\.com\/s\/[a-zA-Z0-9]+(?:\?pwd=[a-zA-Z0-9]+)?/);
-            if (urlMatch) {
-                return urlMatch[0];
-            }
-        }
-
-        // 如果还是找不到，尝试从整个页面文本中提取
-        const fullText = document.body.textContent || '';
-        const urlMatch = fullText.match(/https:\/\/pan\.baidu\.com\/s\/[a-zA-Z0-9]+(?:\?pwd=[a-zA-Z0-9]+)?/);
+    private async extractShareUrl(shareText: string): Promise<string> {
+        const urlMatch = shareText.match(/https:\/\/pan\.baidu\.com\/s\/[a-zA-Z0-9]+(?:\?pwd=[a-zA-Z0-9]+)?/);
         if (urlMatch) {
             return urlMatch[0];
         }
-
         throw new Error('无法提取分享链接');
     }
 
@@ -824,56 +770,12 @@ export class BaiduYunShareHandler {
      * 提取提取码
      * @returns 提取码或undefined
      */
-    private async extractCode(): Promise<string | undefined> {
-        const codeSelectors = [
-            '.extract-code-display',
-            '.code-display',
-            '[data-field="code"]',
-            '.share-code',
-            '.pwd-display'
-        ];
-
-        for (const selector of codeSelectors) {
-            const element = document.querySelector(selector);
-            if (element && element.textContent) {
-                const code = element.textContent.trim();
-                // 验证提取码格式（通常是4位字母数字组合）
-                if (/^[a-zA-Z0-9]{4}$/.test(code)) {
-                    return code;
-                }
-            }
-        }
-
-        // 尝试从文本中提取提取码
-        const textElements = document.querySelectorAll('.share-result *, .share-dialog *, .modal *');
-        for (const element of textElements) {
-            const text = element.textContent || '';
-            // 匹配多种提取码格式
-            const codeMatch = text.match(/提取码[：:]\s*([a-zA-Z0-9]{4})/);
-            if (codeMatch) {
-                return codeMatch[1];
-            }
-
-            // 匹配 pwd= 参数中的提取码
-            const pwdMatch = text.match(/pwd=([a-zA-Z0-9]{4})/);
-            if (pwdMatch) {
-                return pwdMatch[1];
-            }
-        }
-
-        // 如果还是找不到，尝试从整个页面文本中提取
-        const fullText = document.body.textContent || '';
-        const codeMatch = fullText.match(/提取码[：:]\s*([a-zA-Z0-9]{4})/);
+    private async extractCode(shareText: string): Promise<string | undefined> {
+        const codeMatch = shareText.match(/提取码[：:]\s*([a-zA-Z0-9]{4})/);
         if (codeMatch) {
             return codeMatch[1];
         }
-
-        const pwdMatch = fullText.match(/pwd=([a-zA-Z0-9]{4})/);
-        if (pwdMatch) {
-            return pwdMatch[1];
-        }
-
-        return undefined;
+        throw new Error('无法提取提取码');
     }
 
     /**

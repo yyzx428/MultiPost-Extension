@@ -135,6 +135,60 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   linkExtensionMessageHandler(request, sender, sendResponse);
   return true;
 });
+
+// 监听来自 content script 的 window.postMessage 消息
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // 处理来自 content script 的文件操作请求
+  if (request.type === 'request' && request.action === 'MUTLIPOST_EXTENSION_EXECUTE_FILE_OPS') {
+    (async () => {
+      try {
+        console.log('[Background] 收到 content script 文件操作请求:', request);
+
+        const operation = request.data as FileOperation;
+        const result = await fileOperationManager.executeOperation(operation);
+
+        console.log('[Background] 文件操作完成，准备发送响应:', result);
+
+        // 向 content script 发送响应
+        if (sender.tab?.id) {
+          await chrome.tabs.sendMessage(sender.tab.id, {
+            type: 'response',
+            action: 'MUTLIPOST_EXTENSION_EXECUTE_FILE_OPS',
+            traceId: request.traceId,
+            code: result.success ? 0 : 1,
+            data: result.success ? result.data : null,
+            message: result.success ? null : (result.logs?.[0]?.message || '文件操作失败')
+          });
+        }
+
+        // 同时通过 sendResponse 响应
+        if (result.success) {
+          sendResponse({ success: true, data: result.data });
+        } else {
+          sendResponse({ success: false, error: result.logs?.[0]?.message || '文件操作失败' });
+        }
+      } catch (error) {
+        console.error('[Background] 文件操作失败:', error);
+
+        // 向 content script 发送错误响应
+        if (sender.tab?.id) {
+          await chrome.tabs.sendMessage(sender.tab.id, {
+            type: 'response',
+            action: 'MUTLIPOST_EXTENSION_EXECUTE_FILE_OPS',
+            traceId: request.traceId,
+            code: 1,
+            data: null,
+            message: error.message || '文件操作失败'
+          });
+        }
+
+        sendResponse({ success: false, error: error.message || '文件操作失败' });
+      }
+    })();
+    return true; // 保持消息通道开放
+  }
+});
+
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   tabsManagerHandleTabUpdated(tabId, changeInfo, tab);
 });
@@ -179,9 +233,14 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
     // 处理文件操作请求
     (async () => {
       try {
-        console.log('[Background] 收到文件操作请求:', request.data);
+        console.log('[Background] 收到文件操作请求:', request);
 
-        const operation = request.data as FileOperation;
+        // 支持两种消息格式：直接传递数据和嵌套在 data 字段中的数据
+        const operationData = request.data?.data || request.data;
+        const operation = operationData as FileOperation;
+
+        console.log('[Background] 解析后的操作数据:', operation);
+
         const result = await fileOperationManager.executeOperation(operation);
 
         console.log('[Background] 文件操作完成:', result);

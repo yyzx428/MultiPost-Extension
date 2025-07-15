@@ -42,7 +42,7 @@ function handleMessage(event: MessageEvent) {
     if (editor) {
       editor.CodeMirror.setValue(data.content);
     }
-  } else if (data.type === 'request' && data.action === 'MUTLIPOST_EXTENSION_FILE_OPERATION') {
+  } else if (data.type === 'request' && data.action === 'MUTLIPOST_EXTENSION_FILE_OPERATION_REQ') {
     // 处理文件操作请求
     handleFileOperationRequest(data);
   }
@@ -88,44 +88,159 @@ async function callFileOpsShare(
   try {
     console.log('[Helper] 开始调用 file-ops 分享功能');
 
-    // 直接调用 file-ops 模块的分享功能
-    // 由于 helper.ts 在页面上下文中运行，我们需要通过 chrome.runtime.sendMessage 调用 background script
-
-    const result = await new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({
-        action: 'MUTLIPOST_EXTENSION_EXECUTE_FILE_OPS',
-        data: {
-          platform: 'baiduyun',
-          operation: 'share',
-          params: {
-            paths,
-            shareConfig
-          }
-        }
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(`发送消息失败: ${chrome.runtime.lastError.message}`));
-          return;
-        }
-
-        if (response && response.success) {
-          resolve(response.data);
-        } else {
-          reject(new Error(response?.error || '分享操作失败'));
-        }
-      });
-
-      // 设置超时
-      setTimeout(() => {
-        reject(new Error('file-ops 分享操作超时'));
-      }, 120000); // 2分钟超时
-    });
+    // 直接执行百度云分享操作，不依赖 background script
+    const result = await performDirectBaiduYunShare(paths, shareConfig);
 
     console.log('[Helper] file-ops 分享功能调用成功:', result);
     return result;
 
   } catch (error) {
     console.error('[Helper] file-ops 分享功能调用失败:', error);
+    throw error;
+  }
+}
+
+/**
+ * 直接执行百度云分享操作
+ * @param paths 路径数组
+ * @param shareConfig 分享配置
+ * @returns 分享结果
+ */
+async function performDirectBaiduYunShare(
+  paths: string[],
+  shareConfig: { validPeriod: string; extractCodeType: string; customCode?: string }
+): Promise<unknown> {
+  try {
+    console.log('[Helper] 开始直接执行百度云分享操作');
+
+    // 检查页面状态
+    if (!window.location.hostname.includes('pan.baidu.com')) {
+      throw new Error('当前页面不是百度网盘页面');
+    }
+
+    // 等待页面加载完成
+    await new Promise(resolve => {
+      if (document.readyState === 'complete') {
+        resolve(undefined);
+      } else {
+        window.addEventListener('load', resolve);
+      }
+    });
+
+    // 等待页面稳定
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // 执行分享操作
+    const shareResult = await executeBaiduYunShareOperation(paths, shareConfig);
+    console.log('[Helper] 百度云分享操作完成:', shareResult);
+
+    return {
+      success: true,
+      shareUrl: shareResult.shareUrl,
+      extractCode: shareResult.extractCode,
+      formattedText: shareResult.formattedText,
+      timestamp: Date.now()
+    };
+
+  } catch (error) {
+    console.error('[Helper] 直接执行百度云分享操作失败:', error);
+    throw error;
+  }
+}
+
+interface ExtensionResponse<T> {
+  type: string;
+  action: string;
+  traceId: string;
+  code: number;
+  data: T;
+}
+
+export async function sendRequest<D, R>(
+  action: string,
+  data?: D,
+  timeout: number = 5000,
+  ressponAction?: string
+): Promise<R> {
+  const traceId = `share-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  return new Promise<R>((resolve, reject) => {
+    // Create message handler
+    const messageHandler = (event: MessageEvent<ExtensionResponse<R>>) => {
+      if (
+        event.data.type === "response" &&
+        (event.data.action === action ||
+          (ressponAction && event.data.action === ressponAction)) &&
+        event.data.traceId === traceId
+      ) {
+        cleanup();
+        resolve(event.data.data);
+      }
+    };
+
+    // Create timeout handler
+    let timeoutId: NodeJS.Timeout | undefined;
+    if (timeout > 0) {
+      timeoutId = setTimeout(() => {
+        cleanup();
+        reject(new Error(`Request timeout after ${timeout}ms`));
+      }, timeout);
+    }
+
+    // Cleanup function
+    const cleanup = () => {
+      window.removeEventListener("message", messageHandler);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+
+    // Add event listener
+    window.addEventListener("message", messageHandler);
+
+    // Send the message
+    window.postMessage(
+      {
+        type: "request",
+        traceId,
+        action,
+        data,
+      },
+      "*"
+    );
+  });
+}
+
+/**
+ * 执行百度云分享操作
+ * @param paths 路径数组
+ * @param shareConfig 分享配置
+ * @returns 分享结果
+ */
+async function executeBaiduYunShareOperation(
+  paths: string[],
+  shareConfig: { validPeriod: string; extractCodeType: string; customCode?: string }
+): Promise<{ shareUrl: string; extractCode: string; formattedText: string }> {
+  try {
+    console.log('[Helper] 执行百度云分享操作:', { paths, shareConfig });
+
+    return sendRequest<{
+      platform: string; operation: string; params:
+      {
+        paths: string[]; shareConfig:
+        { validPeriod: string; extractCodeType: string; customCode?: string }
+      }
+    },
+      { shareUrl: string; extractCode: string; formattedText: string }>(
+        'MUTLIPOST_EXTENSION_FILE_OPERATION',
+        {
+          platform: 'baiduyun',
+          operation: 'share',
+          params: { paths, shareConfig }
+        }
+      );
+  } catch (error) {
+    console.error('[Helper] 执行百度云分享操作失败:', error);
     throw error;
   }
 }
@@ -190,10 +305,6 @@ async function handleFileOperationRequest(data: {
     }, '*');
   }
 }
-
-//===================================
-// 文件操作功能集成
-//===================================
 
 // 仅在百度网盘页面加载文件操作功能
 if (window.location.hostname.includes('pan.baidu.com')) {
@@ -290,27 +401,7 @@ if (window.location.hostname.includes('pan.baidu.com')) {
     }
   };
 
-  // 调试工具
-  (window as unknown as { multipostExtensionDebug: { checkStatus: () => { fileOpsReady: boolean; currentPlatform: string; timestamp: string }; testShare: (paths: string[]) => Promise<unknown> } }).multipostExtensionDebug = {
-    checkStatus: () => {
-      return {
-        fileOpsReady: true,
-        currentPlatform: window.location.hostname,
-        timestamp: new Date().toISOString()
-      };
-    },
-
-    testShare: async (paths = ['测试文件夹']) => {
-      try {
-        const result = await (window as unknown as { createBaiduYunShare: (paths: string[]) => Promise<unknown> }).createBaiduYunShare(paths);
-        console.log('测试结果:', result);
-        return result;
-      } catch (error) {
-        console.error('测试失败:', error);
-        throw error;
-      }
-    }
-  };
-
   console.log('[MultiPost Extension] 百度云文件操作功能已就绪');
 }
+
+
