@@ -146,17 +146,11 @@ export class ChainActionExecutor {
         const enhancedUseInfo = this.buildEnhancedUseInfo(agisoConfig.useInfo, baiduResult);
         this.addLog('使用说明已增强，包含分享链接');
 
-        // 创建Agiso发布标签页
-        const agisoTab = await this.createAgisoTab();
-        this.addLog('Agiso标签页已创建');
-
         try {
-            // 等待页面加载完成
-            await this.waitForTabLoad(agisoTab.id!);
-            this.addLog('Agiso页面加载完成');
+            // 使用动态发布能力，直接发送发布消息到background script
+            this.addLog('发送Agiso商品发布请求...');
 
-            // 在标签页中执行Agiso发布操作
-            const result = await this.executeAgisoOperationInTab(agisoTab.id!, {
+            const result = await this.sendAgisoPublishRequest({
                 title: agisoConfig.title,
                 useInfo: enhancedUseInfo
             });
@@ -166,6 +160,57 @@ export class ChainActionExecutor {
         } catch (error) {
             throw new Error(`Agiso发布失败: ${typeof error === 'object' && error && 'message' in error && typeof (error as { message: unknown }).message === 'string' ? (error as { message: string }).message : String(error)}`);
         }
+    }
+
+    /**
+     * 发送Agiso发布请求
+     * @param productData 商品数据
+     * @returns 发布结果
+     */
+    private async sendAgisoPublishRequest(productData: {
+        title: string;
+        useInfo: string;
+    }): Promise<{ success: boolean; message: string }> {
+        return new Promise((resolve, reject) => {
+            // 构建商品数据
+            const shangpinData = {
+                title: productData.title,
+                useInfo: productData.useInfo
+            };
+
+            // 构建同步数据
+            const syncData = {
+                platforms: [{ name: 'SHANGPIN_AGISO' }],
+                data: shangpinData,
+                isAutoPublish: true
+            };
+
+            // 发送发布消息
+            chrome.runtime.sendMessage({
+                action: 'MUTLIPOST_EXTENSION_PUBLISH',
+                data: syncData,
+                traceId: `chain-action-agiso-${Date.now()}`
+            }, (response) => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(`发送消息失败: ${chrome.runtime.lastError.message}`));
+                    return;
+                }
+
+                if (response && response.success) {
+                    resolve({
+                        success: true,
+                        message: response.message || '商品发布成功'
+                    });
+                } else {
+                    reject(new Error(response?.error || '商品发布失败'));
+                }
+            });
+
+            // 设置超时
+            setTimeout(() => {
+                reject(new Error('Agiso发布请求超时'));
+            }, 60000); // 60秒超时
+        });
     }
 
     /**
@@ -203,21 +248,7 @@ export class ChainActionExecutor {
         return tab;
     }
 
-    /**
-     * 创建Agiso标签页
-     * @returns 创建的标签页
-     */
-    private async createAgisoTab(): Promise<chrome.tabs.Tab> {
-        const tab = await chrome.tabs.create({
-            url: 'https://agiso.com.cn/',
-            active: false
-        });
 
-        // 添加到标签页管理器
-        await this.addTabToManager(tab, 'Agiso');
-
-        return tab;
-    }
 
     /**
      * 等待标签页加载完成
@@ -344,114 +375,7 @@ export class ChainActionExecutor {
         });
     }
 
-    /**
-     * 在标签页中执行Agiso操作
-     * @param tabId 标签页ID
-     * @param productData 商品数据
-     * @returns 操作结果
-     */
-    private async executeAgisoOperationInTab(tabId: number, productData: {
-        title: string;
-        useInfo: string;
-    }): Promise<{ success: boolean; message: string }> {
-        return new Promise((resolve, reject) => {
-            chrome.scripting.executeScript({
-                target: { tabId },
-                func: function (data: { title: string; useInfo: string }) {
-                    /**
-                     * 在Agiso页面中执行商品发布操作
-                     * @description 使用项目中现有的Agiso发布逻辑
-                     */
-                    console.log('[ChainAction] 开始执行Agiso发布操作:', data);
 
-                    // 使用简单的方式扩展 window 对象
-                    window['multipostSendAgisoResult'] = function (success: boolean, message: string) {
-                        const result = {
-                            success,
-                            message,
-                            timestamp: Date.now()
-                        };
-
-                        try {
-                            // 发送到背景脚本
-                            (chrome as unknown as { runtime: { sendMessage: (message: { action: string; data: unknown }) => void } }).runtime.sendMessage({
-                                action: 'MUTLIPOST_EXTENSION_AGISO_RESULT',
-                                data: result
-                            });
-
-                            console.log('[ChainAction] Agiso结果已发送:', result);
-                        } catch (err) {
-                            console.error('[ChainAction] 发送Agiso结果失败:', err);
-                        }
-                    };
-
-                    // 执行Agiso发布操作
-                    executeAgisoPublish(data);
-
-                    /**
-                     * 执行Agiso发布操作（在页面上下文中）
-                     * @param productData 商品数据
-                     */
-                    function executeAgisoPublish(productData: { title: string; useInfo: string }) {
-                        console.log('[ChainAction] 执行Agiso发布操作:', productData);
-
-                        // 这里使用项目中现有的Agiso发布逻辑
-                        // 可以从src/sync/shangpin/agiso.ts中导入相关函数
-
-                        setTimeout(async () => {
-                            try {
-                                // 执行Agiso发布逻辑
-                                await performAgisoPublish(productData);
-
-                                // 发送成功结果
-                                window['multipostSendAgisoResult'](true, '商品发布成功');
-                            } catch (error) {
-                                console.error('[ChainAction] Agiso发布失败:', error);
-                                // 使用 window 扩展
-                                const win = window as unknown as { multipostSendAgisoResult?: (success: boolean, message: string) => void };
-                                if (typeof win.multipostSendAgisoResult === 'function') {
-                                    // 发送失败结果时，error.message 需类型保护
-                                    let msg = '未知错误';
-                                    if (typeof error === 'object' && error && 'message' in error && typeof (error as { message: unknown }).message === 'string') {
-                                        msg = (error as { message: string }).message;
-                                    } else if (typeof error === 'string') {
-                                        msg = error;
-                                    }
-                                    win.multipostSendAgisoResult(false, msg);
-                                }
-                            }
-                        }, 2000);
-                    }
-
-                    /**
-                     * 执行Agiso发布逻辑
-                     * @param productData 商品数据
-                     */
-                    async function performAgisoPublish(productData: { title: string; useInfo: string }) {
-                        console.log('[ChainAction] 执行Agiso发布逻辑:', productData);
-                        // 这里实现具体的Agiso发布逻辑
-                        // 可以使用项目中现有的Agiso发布代码
-                    }
-                },
-                args: [productData]
-            }).then(() => {
-                // 监听结果
-                const messageListener = (message: unknown, sender: { tab?: { id?: number } }) => {
-                    if ((message as { action?: string }).action === 'MUTLIPOST_EXTENSION_AGISO_RESULT' && sender.tab?.id === tabId) {
-                        chrome.runtime.onMessage.removeListener(messageListener);
-                        resolve((message as { data: unknown }).data as { success: boolean; message: string });
-                    }
-                };
-                chrome.runtime.onMessage.addListener(messageListener);
-
-                // 设置超时
-                setTimeout(() => {
-                    chrome.runtime.onMessage.removeListener(messageListener);
-                    reject(new Error('Agiso操作超时'));
-                }, 60000); // 60秒超时
-            }).catch(reject);
-        });
-    }
 
     /**
      * 添加标签页到管理器
