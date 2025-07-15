@@ -5,7 +5,6 @@
 
 // 百度云 + Agiso 链式操作
 export * from './baidu-agiso/chain-action';
-export * from './baidu-agiso/chain-action-example';
 
 // 链式操作类型定义
 export interface ChainActionBase {
