@@ -119,6 +119,7 @@ export class BaiduYunShareHandler {
             for (const folderName of selection.selectByFolder) {
                 const folder = folderFiles.find(f => f.name === folderName);
                 if (folder) {
+                    console.log('选择文件夹:', folder.name);
                     await this.selectFileByName(folder.name);
                     selectedFiles.push(folder);
                 }
@@ -262,7 +263,7 @@ export class BaiduYunShareHandler {
         for (const row of rows) {
             const nameElement = row.querySelector('a[title], .file-name, .name');
             const name = nameElement?.getAttribute('title') || nameElement?.textContent?.trim();
-
+            console.log('查找文件行:', name);
             if (name === fileName) {
                 return row;
             }

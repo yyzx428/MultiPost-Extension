@@ -64,22 +64,68 @@ async function performBaiduYunShare(
   try {
     console.log('[Helper] 执行百度云分享操作:', { paths, shareConfig });
 
-    // 这里应该调用实际的百度云文件操作功能
-    // 由于 helper.ts 是在页面上下文中运行的，我们需要直接操作 DOM
-    // 暂时返回一个模拟结果，实际实现需要集成 file-ops 模块
+    // 调用 file-ops 模块的百度云分享功能
+    const result = await callFileOpsShare(paths, shareConfig);
 
-    // 模拟分享结果
-    const mockResult = {
-      shareUrl: `https://pan.baidu.com/s/1${Math.random().toString(36).substr(2, 9)}`,
-      extractCode: shareConfig.extractCodeType === '随机生成' ? Math.random().toString(36).substr(2, 4).toUpperCase() : shareConfig.customCode,
-      validUntil: shareConfig.validPeriod === '7天' ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : '永久有效',
-      sharedFiles: paths.map(path => ({ name: path, type: 'folder' as const }))
-    };
-
-    console.log('[Helper] 百度云分享操作完成:', mockResult);
-    return mockResult;
+    console.log('[Helper] 百度云分享操作完成:', result);
+    return result;
   } catch (error) {
     console.error('[Helper] 百度云分享操作失败:', error);
+    throw error;
+  }
+}
+
+/**
+ * 调用 file-ops 模块的分享功能
+ * @param paths 路径数组
+ * @param shareConfig 分享配置
+ * @returns 分享结果
+ */
+async function callFileOpsShare(
+  paths: string[],
+  shareConfig: { validPeriod: string; extractCodeType: string; customCode?: string }
+): Promise<unknown> {
+  try {
+    console.log('[Helper] 开始调用 file-ops 分享功能');
+
+    // 直接调用 file-ops 模块的分享功能
+    // 由于 helper.ts 在页面上下文中运行，我们需要通过 chrome.runtime.sendMessage 调用 background script
+
+    const result = await new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({
+        action: 'MUTLIPOST_EXTENSION_EXECUTE_FILE_OPS',
+        data: {
+          platform: 'baiduyun',
+          operation: 'share',
+          params: {
+            paths,
+            shareConfig
+          }
+        }
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(`发送消息失败: ${chrome.runtime.lastError.message}`));
+          return;
+        }
+
+        if (response && response.success) {
+          resolve(response.data);
+        } else {
+          reject(new Error(response?.error || '分享操作失败'));
+        }
+      });
+
+      // 设置超时
+      setTimeout(() => {
+        reject(new Error('file-ops 分享操作超时'));
+      }, 120000); // 2分钟超时
+    });
+
+    console.log('[Helper] file-ops 分享功能调用成功:', result);
+    return result;
+
+  } catch (error) {
+    console.error('[Helper] file-ops 分享功能调用失败:', error);
     throw error;
   }
 }

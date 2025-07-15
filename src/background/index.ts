@@ -175,6 +175,29 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
   if (request.action === 'MUTLIPOST_EXTENSION_CHECK_SERVICE_STATUS') {
     sendResponse({ extensionId: chrome.runtime.id });
   }
+  if (request.action === 'MUTLIPOST_EXTENSION_EXECUTE_FILE_OPS') {
+    // 处理文件操作请求
+    (async () => {
+      try {
+        console.log('[Background] 收到文件操作请求:', request.data);
+
+        const operation = request.data as FileOperation;
+        const result = await fileOperationManager.executeOperation(operation);
+
+        console.log('[Background] 文件操作完成:', result);
+
+        if (result.success) {
+          sendResponse({ success: true, data: result.data });
+        } else {
+          sendResponse({ success: false, error: result.logs?.[0]?.message || '文件操作失败' });
+        }
+      } catch (error) {
+        console.error('[Background] 文件操作失败:', error);
+        sendResponse({ success: false, error: error.message || '文件操作失败' });
+      }
+    })();
+    return true; // 保持消息通道开放
+  }
   if (request.action === 'MUTLIPOST_EXTENSION_PUBLISH') {
     const data = request.data as SyncData;
     // 将 ExtensionExternalRequest 中的 traceId 传递到 SyncData 中
