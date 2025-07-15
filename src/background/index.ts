@@ -223,6 +223,8 @@ let currentChainActionData: {
   action: string;
   config: Record<string, unknown>;
   traceId?: string;
+  hasExecuted?: boolean;
+  responceCallback?: (data: any) => void;
 } | null = null;
 
 const defaultMessageHandler = (request, sender, sendResponse) => {
@@ -438,6 +440,7 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
       traceId: request.traceId
     };
     currentChainActionData = chainActionData;
+    currentChainActionData.responceCallback = sendResponse;
 
     (async () => {
       await chrome.windows.create({
@@ -451,6 +454,21 @@ const defaultMessageHandler = (request, sender, sendResponse) => {
 
   if (request.action === 'MUTLIPOST_EXTENSION_CHAIN_ACTION_REQUEST_DATA') {
     sendResponse({ config: currentChainActionData });
+  }
+
+  // 新增：处理链式操作完成消息
+  if (request.action === 'MUTLIPOST_EXTENSION_CHAIN_ACTION_COMPLETE') {
+    const result = request.data;
+
+    // 调用回调函数
+    if (currentChainActionData?.responceCallback) {
+      currentChainActionData.responceCallback(result);
+      console.log('链式操作回调已执行，结果:', result);
+    }
+
+    // 清空变量
+    currentChainActionData = null;
+    console.log('链式操作数据已清空');
   }
 };
 

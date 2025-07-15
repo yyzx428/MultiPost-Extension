@@ -390,6 +390,14 @@ export default function ChainActionModal() {
                 isExecuting: false
             }));
 
+            // 调用回调函数并清空变量
+            chrome.runtime.sendMessage(
+                { action: 'MUTLIPOST_EXTENSION_CHAIN_ACTION_COMPLETE', data: result },
+                () => {
+                    console.log('链式操作完成回调已发送');
+                }
+            );
+
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             updateStepStatus(0, 'error', errorMessage);
