@@ -280,8 +280,8 @@ export class ChainActionExecutor {
                 target: { tabId },
                 func: function (operation: FileOperation) {
                     /**
-                     * 在页面上下文中调用helper.ts提供的接口
-                     * @description 直接使用helper.ts中已加载的百度云操作功能
+                     * 在页面上下文中请求 MUTLIPOST_EXTENSION_FILE_OPERATION action
+                     * @description 通过 window.postMessage 请求文件操作，等待返回结果
                      */
                     console.log('[ChainAction] 开始执行file-ops操作:', operation);
 
@@ -303,15 +303,16 @@ export class ChainActionExecutor {
                             console.error('[ChainAction] 发送file-ops结果失败:', err);
                         }
                     };
+
                     function executeBaiduYunShare(params: { paths: string[]; shareConfig: { validPeriod: string; extractCodeType: string; customCode?: string } }) {
                         console.log('[ChainAction] 执行百度云分享操作:', params);
 
                         // 立即执行，不使用setTimeout
                         (async () => {
                             try {
-                                console.log('[ChainAction] 开始调用helper接口...');
-                                const result = await callHelperInterface(params);
-                                console.log('[ChainAction] helper接口调用成功:', result);
+                                console.log('[ChainAction] 开始请求 MUTLIPOST_EXTENSION_FILE_OPERATION...');
+                                const result = await requestFileOperation(params);
+                                console.log('[ChainAction] 文件操作请求成功:', result);
                                 window['multipostSendFileOpsResult'](true, result);
                             } catch (error: unknown) {
                                 console.error('[ChainAction] 百度云分享失败:', error);
@@ -325,22 +326,52 @@ export class ChainActionExecutor {
                             }
                         })();
                     }
-                    function callHelperInterface(params: { paths: string[]; shareConfig: { validPeriod: string; extractCodeType: string; customCode?: string } }): Promise<unknown> {
+
+                    /**
+                     * 请求 MUTLIPOST_EXTENSION_FILE_OPERATION action
+                     * @param params 操作参数
+                     * @returns 操作结果
+                     */
+                    function requestFileOperation(params: { paths: string[]; shareConfig: { validPeriod: string; extractCodeType: string; customCode?: string } }): Promise<unknown> {
                         return new Promise((resolve, reject) => {
                             const requestId = `chain-action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+                            console.log('[ChainAction] 发送文件操作请求:', {
+                                type: 'request',
+                                action: 'MUTLIPOST_EXTENSION_FILE_OPERATION',
+                                traceId: requestId,
+                                data: {
+                                    platform: 'baiduyun',
+                                    operation: 'share',
+                                    params: params
+                                }
+                            });
+
+                            // 监听响应
                             const responseHandler = (event: MessageEvent) => {
+                                console.log('[ChainAction] 收到消息:', event.data);
+
                                 if (event.data.type === 'response' &&
                                     event.data.traceId === requestId &&
                                     event.data.action === 'MUTLIPOST_EXTENSION_FILE_OPERATION') {
+
                                     window.removeEventListener('message', responseHandler);
+                                    console.log('[ChainAction] 收到文件操作响应:', event.data);
+
                                     if (event.data.code === 0) {
+                                        console.log('[ChainAction] 文件操作成功:', event.data.data);
                                         resolve(event.data.data);
                                     } else {
-                                        reject(event.data.message || '操作失败');
+                                        console.error('[ChainAction] 文件操作失败:', event.data.message);
+                                        reject(new Error(event.data.message || '操作失败'));
                                     }
                                 }
                             };
+
+                            // 添加消息监听器
                             window.addEventListener('message', responseHandler);
+
+                            // 发送请求
                             window.postMessage({
                                 type: 'request',
                                 action: 'MUTLIPOST_EXTENSION_FILE_OPERATION',
@@ -354,30 +385,48 @@ export class ChainActionExecutor {
                                     }
                                 }
                             }, '*');
+
+                            // 设置超时
                             setTimeout(() => {
                                 window.removeEventListener('message', responseHandler);
-                                reject('helper.ts接口调用超时');
-                            }, 30000);
+                                console.error('[ChainAction] 文件操作请求超时');
+                                reject(new Error('MUTLIPOST_EXTENSION_FILE_OPERATION 请求超时'));
+                            }, 60000); // 60秒超时
                         });
                     }
+
+                    // 根据操作类型执行相应的处理
                     if (operation.platform === 'baiduyun' && operation.operation === 'share') {
                         executeBaiduYunShare(operation.params as { paths: string[]; shareConfig: { validPeriod: string; extractCodeType: string; customCode?: string } });
+                    } else {
+                        // 其他平台的操作可以在这里扩展
+                        window['multipostSendFileOpsResult'](false, null, `不支持的操作: ${operation.platform}.${operation.operation}`);
                     }
                 },
                 args: [fileOperation]
             }).then(() => {
+                // 监听来自页面脚本的结果消息
                 const messageListener = (message: unknown, sender: { tab?: { id?: number } }) => {
                     if ((message as { action?: string }).action === 'MUTLIPOST_EXTENSION_FILE_OPS_RESULT' && sender.tab?.id === tabId) {
                         chrome.runtime.onMessage.removeListener(messageListener);
-                        resolve((message as { data: unknown }).data as { success: boolean; data?: unknown; error?: string; timestamp: number; logs?: string[] });
+                        const result = (message as { data: unknown }).data as { success: boolean; data?: unknown; error?: string; timestamp: number; logs?: string[] };
+                        console.log('[ChainAction] 收到文件操作结果:', result);
+                        resolve(result);
                     }
                 };
+
                 chrome.runtime.onMessage.addListener(messageListener);
+
+                // 设置超时
                 setTimeout(() => {
                     chrome.runtime.onMessage.removeListener(messageListener);
-                    reject(new Error('file-ops操作超时 (60秒)'));
-                }, 120000); // 增加到120秒超时
-            }).catch(reject);
+                    console.error('[ChainAction] file-ops操作超时');
+                    reject(new Error('file-ops操作超时 (120秒)'));
+                }, 120000); // 120秒超时
+            }).catch((error) => {
+                console.error('[ChainAction] 执行脚本失败:', error);
+                reject(error);
+            });
         });
     }
 

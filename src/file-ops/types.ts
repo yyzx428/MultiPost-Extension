@@ -101,7 +101,7 @@ export interface ShareResult {
     /** 短链接 */
     shortUrl?: string;
     /** 有效期 */
-    validUntil: string;
+    validUntil?: string;
     /** 创建时间 */
     createdAt: string;
     /** 格式化的分享文本 */
