@@ -60,7 +60,7 @@ export class ChainActionExecutor {
             // 第1步：获取百度云分享链接
             this.addLog('第1步：获取百度云分享链接');
             const baiduResult = await this.getBaiduShareLink(config.baiduShare);
-            this.addLog(`百度云分享成功，链接: ${baiduResult.shareUrl}`);
+            this.addLog(`百度云分享成功，链接: ${baiduResult.shareText}`);
 
             // 第2步：使用分享链接在Agiso平台发布商品
             this.addLog('第2步：在Agiso平台发布商品');
@@ -121,13 +121,41 @@ export class ChainActionExecutor {
             this.addLog('百度云分享操作执行完成');
 
             if (result.success && result.data) {
-                const shareResult = result.data as ShareResult;
-                this.addLog(`分享创建成功，链接: ${shareResult.shareUrl}`);
+                // 检查数据结构，可能有多层嵌套
+                let shareResult: ShareResult;
+                const resultData = result.data as Record<string, unknown>;
+
+                if (resultData.data && typeof resultData.data === 'object') {
+                    // 如果 result.data.data 存在，说明真正的结果在那里
+                    shareResult = resultData.data as unknown as ShareResult;
+                    console.log('[ChainAction] 从嵌套结构中提取分享结果:', shareResult);
+                } else {
+                    // 否则直接使用 result.data
+                    shareResult = resultData as unknown as ShareResult;
+                }
+
+                this.addLog('[ChainAction] 分享创建成功，链接:' + shareResult.shareUrl);
+
+                // 关闭百度云标签页
+                try {
+                    await chrome.tabs.remove(baiduTab.id!);
+                    this.addLog('百度云标签页已关闭');
+                } catch (error) {
+                    this.addLog(`关闭百度云标签页失败: ${error}`);
+                }
+
                 return shareResult;
             } else {
                 throw new Error(result.error || '分享操作失败');
             }
         } catch (error) {
+            // 确保在错误情况下也关闭百度云标签页
+            try {
+                await chrome.tabs.remove(baiduTab.id!);
+                this.addLog('百度云标签页已关闭（错误情况）');
+            } catch (closeError) {
+                this.addLog(`关闭百度云标签页失败: ${closeError}`);
+            }
             throw new Error(`百度云分享失败: ${typeof error === 'object' && error && 'message' in error && typeof (error as { message: unknown }).message === 'string' ? (error as { message: string }).message : String(error)}`);
         }
     }
@@ -144,9 +172,9 @@ export class ChainActionExecutor {
     ): Promise<{ success: boolean; message: string }> {
         this.addLog('准备在Agiso平台发布商品');
 
-        // 构建包含分享链接的使用说明
-        const enhancedUseInfo = this.buildEnhancedUseInfo(agisoConfig.useInfo, baiduResult);
-        this.addLog('使用说明已增强，包含分享链接');
+        // 使用 shareText 给 useInfo 赋值
+        const enhancedUseInfo = this.buildEnhancedUseInfoWithShareText(agisoConfig.useInfo, baiduResult);
+        this.addLog('使用说明已增强，使用 shareText 内容');
 
         try {
             // 使用动态发布能力，直接发送发布消息到background script
@@ -174,6 +202,49 @@ export class ChainActionExecutor {
         useInfo: string;
     }): Promise<{ success: boolean; message: string }> {
         return new Promise((resolve, reject) => {
+            const traceId = `chain-action-agiso-${Date.now()}`;
+            let responseReceived = false;
+            let messageListener: ((message: unknown) => void) | null = null;
+
+            // 监听发布结果消息
+            messageListener = (message: unknown) => {
+                this.addLog(`收到消息: ${JSON.stringify(message)}`);
+
+                const messageAction = (message as { action?: string }).action;
+                const messageTraceId = (message as { data?: { traceId?: string } }).data?.traceId;
+
+                this.addLog(`消息action: ${messageAction}, 消息traceId: ${messageTraceId}, 期望traceId: ${traceId}`);
+
+                if (messageAction === 'MUTLIPOST_EXTENSION_PUBLISH_RESULT' && messageTraceId === traceId) {
+
+                    this.addLog(`匹配到目标消息，traceId: ${traceId}`);
+
+                    if (messageListener) {
+                        chrome.runtime.onMessage.removeListener(messageListener);
+                        messageListener = null;
+                    }
+                    responseReceived = true;
+
+                    const result = message as { data?: { success: boolean; message: string; platformName: string } };
+                    this.addLog(`收到Agiso发布结果: ${result.data?.platformName}, 成功: ${result.data?.success}`);
+                    this.addLog(`消息数据结构: ${JSON.stringify(result)}`);
+
+                    if (result.data?.success === true) {
+                        this.addLog('发布成功，准备resolve');
+                        resolve({
+                            success: true,
+                            message: result.data.message || '商品发布成功'
+                        });
+                    } else {
+                        this.addLog(`发布失败，success值: ${result.data?.success}, 类型: ${typeof result.data?.success}`);
+                        reject(new Error(result.data?.message || '商品发布失败'));
+                    }
+                }
+            };
+
+            this.addLog(`添加消息监听器，等待 traceId: ${traceId}`);
+            chrome.runtime.onMessage.addListener(messageListener);
+
             // 构建商品数据
             const shangpinData = {
                 title: productData.title,
@@ -187,31 +258,53 @@ export class ChainActionExecutor {
                 isAutoPublish: true
             };
 
+            this.addLog(`发送Agiso发布请求，traceId: ${traceId}`);
+            this.addLog(`商品标题: ${productData.title}`);
+            this.addLog(`使用说明长度: ${productData.useInfo.length} 字符`);
+
             // 发送发布消息
             chrome.runtime.sendMessage({
                 action: 'MUTLIPOST_EXTENSION_PUBLISH',
                 data: syncData,
-                traceId: `chain-action-agiso-${Date.now()}`
+                traceId: traceId
             }, (response) => {
                 if (chrome.runtime.lastError) {
+                    if (messageListener) {
+                        chrome.runtime.onMessage.removeListener(messageListener);
+                        messageListener = null;
+                    }
                     reject(new Error(`发送消息失败: ${chrome.runtime.lastError.message}`));
                     return;
                 }
 
-                if (response && response.success) {
-                    resolve({
-                        success: true,
-                        message: response.message || '商品发布成功'
-                    });
-                } else {
-                    reject(new Error(response?.error || '商品发布失败'));
+                // 立即响应处理（兼容旧版本）
+                if (response && !responseReceived) {
+                    responseReceived = true;
+                    if (messageListener) {
+                        chrome.runtime.onMessage.removeListener(messageListener);
+                        messageListener = null;
+                    }
+
+                    if (response.success) {
+                        resolve({
+                            success: true,
+                            message: response.message || '商品发布成功'
+                        });
+                    } else {
+                        reject(new Error(response?.error || '商品发布失败'));
+                    }
                 }
             });
 
             // 设置超时
             setTimeout(() => {
-                reject(new Error('Agiso发布请求超时'));
-            }, 60000); // 60秒超时
+                if (!responseReceived && messageListener) {
+                    chrome.runtime.onMessage.removeListener(messageListener);
+                    messageListener = null;
+                    this.addLog(`Agiso发布请求超时，traceId: ${traceId}`);
+                    reject(new Error('Agiso发布请求超时'));
+                }
+            }, 30000); // 30秒超时，便于调试
         });
     }
 
@@ -232,6 +325,22 @@ export class ChainActionExecutor {
         ].filter(line => line !== '').join('\n');
 
         return `${originalUseInfo}\n${shareInfo}`;
+    }
+
+    /**
+     * 使用 shareText 构建增强的使用说明
+     * @param originalUseInfo 原始使用说明
+     * @param baiduResult 百度云分享结果
+     * @returns 增强的使用说明
+     */
+    private buildEnhancedUseInfoWithShareText(originalUseInfo: string, baiduResult: ShareResult): string {
+        // 优先使用 shareText，如果没有则使用自定义格式
+        if (originalUseInfo && originalUseInfo.trim() !== '') {
+            this.addLog(`使用 shareText 内容: ${baiduResult.shareText.substring(0, 100)}...`);
+            return `${originalUseInfo}\n\n${baiduResult.shareText}`;
+        } else {
+            return `${baiduResult.shareText}`;
+        }
     }
 
     /**
@@ -408,6 +517,7 @@ export class ChainActionExecutor {
                 // 监听来自页面脚本的结果消息
                 const messageListener = (message: unknown, sender: { tab?: { id?: number } }) => {
                     if ((message as { action?: string }).action === 'MUTLIPOST_EXTENSION_FILE_OPS_RESULT' && sender.tab?.id === tabId) {
+                        console.log('[ChainAction] 收到文件操作结果:', message);
                         chrome.runtime.onMessage.removeListener(messageListener);
                         const result = (message as { data: unknown }).data as { success: boolean; data?: unknown; error?: string; timestamp: number; logs?: string[] };
                         console.log('[ChainAction] 收到文件操作结果:', result);

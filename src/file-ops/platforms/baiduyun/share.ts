@@ -40,6 +40,12 @@ export class BaiduYunShareHandler {
             // 第5步：创建分享链接
             const shareResult = await this.createShareLink(shareDialog);
             console.log('shareResult', shareResult);
+
+            // 检查分享结果是否有效
+            if (!shareResult) {
+                throw new Error('创建分享链接失败：无法获取分享结果');
+            }
+
             // 第6步：获取分享结果
             return {
                 ...shareResult,
@@ -660,8 +666,7 @@ export class BaiduYunShareHandler {
         // 点击创建链接按钮
         const createButton = await this.findCreateLinkButton(shareDialog);
         if (!createButton) {
-            console.log('找不到创建链接按钮');
-            return null;
+            throw new Error('找不到创建链接按钮');
         }
 
         createButton.click();
@@ -669,7 +674,12 @@ export class BaiduYunShareHandler {
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         // 提取分享信息
-        return await this.extractShareInfo();
+        const shareInfo = await this.extractShareInfo();
+        if (!shareInfo) {
+            throw new Error('无法提取分享信息');
+        }
+
+        return shareInfo;
     }
 
     /**
@@ -723,10 +733,22 @@ export class BaiduYunShareHandler {
         }
 
         // 提取分享链接
-        const shareUrl = await this.extractShareUrl(shareText);
+        let shareUrl: string;
+        try {
+            shareUrl = await this.extractShareUrl(shareText);
+        } catch (error) {
+            console.error('提取分享链接失败:', error);
+            shareUrl = '提取失败';
+        }
 
         // 提取提取码
-        const extractCode = await this.extractCode(shareText);
+        let extractCode: string | undefined;
+        try {
+            extractCode = await this.extractCode(shareText);
+        } catch (error) {
+            console.error('提取提取码失败:', error);
+            extractCode = undefined;
+        }
 
         return {
             shareUrl,
