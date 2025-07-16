@@ -1,9 +1,8 @@
 import { Storage } from '@plasmohq/storage';
 import { getPlatformInfos } from '~sync/common';
+import { API_BASE_URL } from '~utils/config';
 
 const storage = new Storage({ area: 'local' });
-
-const host = process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://multipost.app';
 
 export const ping = async (withPlatforms: boolean = false) => {
   const apiKey = await storage.get('apiKey');
@@ -29,7 +28,7 @@ export const ping = async (withPlatforms: boolean = false) => {
     body.platformInfos = platformInfos;
   }
 
-  const response = await fetch(`${host}/api/extension/ping`, {
+  const response = await fetch(`${API_BASE_URL}/api/extension/ping`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

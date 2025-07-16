@@ -4,6 +4,7 @@ import { HeroUIProvider, Button, Image, Checkbox } from '@heroui/react';
 import { Storage } from '@plasmohq/storage';
 import { Shield, ShieldAlert, Globe, XCircle, CheckCircle2 } from 'lucide-react';
 import cssText from 'data-text:~style.css';
+import { APP_NAME } from '~utils/config';
 
 export function getShadowContainer() {
   return document.querySelector('#test-shadow').shadowRoot.querySelector('#plasmo-shadow-container');
@@ -36,7 +37,7 @@ const TrustDomain = () => {
   const storage = new Storage({ area: 'local' });
 
   useEffect(() => {
-    document.title = chrome.i18n.getMessage('optionsTitle') + ' - MultiPost';
+    document.title = chrome.i18n.getMessage('optionsTitle') + ' - ' + APP_NAME;
     try {
       // 获取 hash 部分（移除开头的 #）
       const encodedParams = window.location.hash.substring(1);
@@ -217,9 +218,8 @@ const TrustDomain = () => {
 
                 {feedback && (
                   <div
-                    className={`flex items-center justify-center p-4 rounded-lg transition-all duration-300 ${
-                      feedback.type === 'success' ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'
-                    }`}>
+                    className={`flex items-center justify-center p-4 rounded-lg transition-all duration-300 ${feedback.type === 'success' ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'
+                      }`}>
                     <div className="flex gap-2 items-center">
                       {feedback.type === 'success' ? (
                         <CheckCircle2 className="w-5 h-5 text-green-500" />

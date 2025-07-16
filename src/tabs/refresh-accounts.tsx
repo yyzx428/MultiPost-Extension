@@ -5,6 +5,7 @@ import { RefreshCw, CheckCircle2, XCircle, Loader2, ExternalLink } from 'lucide-
 import cssText from 'data-text:~style.css';
 import { refreshAllAccountInfo, refreshAccountInfoMap } from '~sync/account';
 import type { AccountInfo } from '~sync/common';
+import { APP_NAME } from '~utils/config';
 import { Storage } from '@plasmohq/storage';
 
 const storage = new Storage({
@@ -101,7 +102,7 @@ const RefreshAccounts = () => {
   }, []);
 
   useEffect(() => {
-    document.title = chrome.i18n.getMessage('refreshAccountsTitle') + ' - MultiPost';
+    document.title = chrome.i18n.getMessage('refreshAccountsTitle') + ' - ' + APP_NAME;
     refreshAccounts();
   }, [refreshAccounts]);
 

@@ -7,6 +7,7 @@ import { ShangPinMap } from './shangpin/shangpin';
 import { VideoInfoMap } from './video';
 import { YunPanMap } from './yunpan/yunpan';
 import '../types/window';
+import { APP_NAME } from '~utils/config';
 
 export interface SyncDataPlatform {
   name: string;
@@ -182,7 +183,7 @@ export async function createTabsForPlatforms(data: SyncData) {
             groupId = await chrome.tabs.group({ tabIds: [tab.id!] });
             await chrome.tabGroups.update(groupId, {
               color: 'blue',
-              title: `MultiPost-${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`,
+              title: `${APP_NAME}-${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`,
             });
           } else {
             // 将新标签页添加到现有组中

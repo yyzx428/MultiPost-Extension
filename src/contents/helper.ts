@@ -4,6 +4,7 @@ export { };
 import type { PlasmoCSConfig } from 'plasmo';
 import { handleBilibiliImageUpload } from './helper/bilibili';
 import { handleBlueskyVideoUpload, handleBlueskyImageUpload } from './helper/bluesky';
+import { APP_NAME } from '~utils/config';
 
 export const config: PlasmoCSConfig = {
   matches: ['https://t.bilibili.com/*', 'https://bsky.app/*', 'https://www.v2ex.com/write*', 'https://v2ex.com/write*', 'https://pan.baidu.com/*'],
@@ -101,7 +102,7 @@ if (window.location.hostname.includes('pan.baidu.com')) {
     });
   };
 
-  console.log('[MultiPost Extension] 百度云文件操作功能已就绪');
+  console.log(`[${APP_NAME}] 百度云文件操作功能已就绪`);
 }
 
 
