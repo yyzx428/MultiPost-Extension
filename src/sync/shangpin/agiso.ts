@@ -348,7 +348,7 @@ export async function ShangpinAgiso(data: SyncData) {
                 return false;
             }
 
-            const link = targetRow.querySelector('a') as HTMLElement;
+            const link = targetRow.querySelector('span[class="link"]') as HTMLElement;
             if (!link) {
                 console.error('未找到商品链接');
                 return false;
