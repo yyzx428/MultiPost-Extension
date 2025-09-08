@@ -282,6 +282,22 @@ export async function ShangpinRednote(data: SyncData) {
     }
 
     if (files && files.length > 0) {
+
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        await waitForElement('h6');
+        const h6s = document.querySelectorAll('h6');
+        const h6 = Array.from(h6s).find(
+            (element: HTMLInputElement) => element.textContent?.includes('普通发品'),
+        ) as HTMLInputElement;
+        if (!h6) {
+            console.log('普通发品未找到');
+            return;
+        }
+
+        h6.click();
+        console.log("h6sclick");
+
+
         // 等待页面加载
         await waitForElement('input[class="d-text"]');
         await new Promise((resolve) => setTimeout(resolve, 2000));
