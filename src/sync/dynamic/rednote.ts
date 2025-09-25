@@ -632,14 +632,14 @@ export async function DynamicRednote(data: SyncData) {
       }
     }
 
-    if (shangpin) {
-      await selelctProduct();
-    }
-
     // 处理原创声明
     if (originalFlag) {
       console.log('检测到原创声明标志，开始处理原创声明...');
       await handleOriginalDeclaration();
+    }
+
+    if (shangpin) {
+      await selelctProduct();
     }
 
     // 自动发布
