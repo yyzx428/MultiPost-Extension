@@ -35,6 +35,7 @@ export interface DynamicData {
   tags?: string[];
   originalFlag?: boolean; // 原创声明标志
   publishTime?: string; // 定时发布时间，格式：YYYY-MM-DD HH:mm
+  shanpin?: string; // 商品名
 }
 
 export interface YunPanData {

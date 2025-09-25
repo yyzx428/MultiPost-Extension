@@ -2,7 +2,7 @@ import type { DynamicData, SyncData } from '../common';
 
 // 优先发布图文
 export async function DynamicRednote(data: SyncData) {
-  const { title, content, images, tags, originalFlag, publishTime } = data.data as DynamicData;
+  const { title, content, images, tags, originalFlag, publishTime, shanpin } = data.data as DynamicData;
 
   //===================================
   // 工具函数
@@ -497,6 +497,68 @@ export async function DynamicRednote(data: SyncData) {
     }
   }
 
+  // 选择商品
+  async function selelctProduct() {
+    const buttons = document.querySelectorAll('div[class="d-button-content"]');
+    const addButton = Array.from(buttons).find(
+      (button) => button.textContent?.includes('添加商品'),
+    ) as HTMLButtonElement;
+
+    if (!addButton) {
+      console.log('添加商品按钮没找到');
+      return
+    }
+
+
+    addButton.click();
+    console.log('点击添加商品按钮');
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const inputs = document.querySelectorAll('input[class="d-text"]');
+    const input = Array.from(inputs).find(
+      (item) => (item as HTMLInputElement).placeholder?.includes('搜索商品ID 或 商品名称'),
+    ) as HTMLInputElement;
+    if (!input) {
+      console.log('搜索商品框没找到');
+      return;
+    }
+
+    input.value = shanpin;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const items = document.querySelectorAll('div[class="good-card-container"]');
+    const item = Array.from(items).find(
+      (item) => (item).textContent?.includes(shanpin),
+    );
+    if (!item) {
+      console.log('没找到商品', { shanpin });
+      return;
+    }
+
+    const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    if (!checkbox) {
+      console.log('商品选择checkbox没找到', { shanpin });
+      return;
+    }
+
+    checkbox.click();
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+
+    const saveButtons = document.querySelectorAll('div[class="d-button-content"]');
+    const saveButton = Array.from(saveButtons).find(
+      (item) => (item).textContent?.includes('保存'),
+    ) as HTMLInputElement;
+    if (!saveButton) {
+      console.log('商品选择保存按钮没找到', { shanpin });
+      return;
+    }
+
+    saveButton.click();
+    console.log('笔记添加商品完成', { shanpin });
+  }
+
   //===================================
   // 发布相关函数
   //===================================
@@ -568,6 +630,10 @@ export async function DynamicRednote(data: SyncData) {
         console.error('定时发布设置失败');
         return;
       }
+    }
+
+    if (shanpin) {
+      await selelctProduct();
     }
 
     // 处理原创声明
