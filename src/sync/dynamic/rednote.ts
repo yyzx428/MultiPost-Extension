@@ -2,7 +2,7 @@ import type { DynamicData, SyncData } from '../common';
 
 // 优先发布图文
 export async function DynamicRednote(data: SyncData) {
-  const { title, content, images, tags, originalFlag, publishTime, shanpin } = data.data as DynamicData;
+  const { title, content, images, tags, originalFlag, publishTime, shangpin } = data.data as DynamicData;
 
   //===================================
   // 工具函数
@@ -523,22 +523,22 @@ export async function DynamicRednote(data: SyncData) {
       return;
     }
 
-    input.value = shanpin;
+    input.value = shangpin;
     input.dispatchEvent(new Event('input', { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
     const items = document.querySelectorAll('div[class="good-card-container"]');
     const item = Array.from(items).find(
-      (item) => (item).textContent?.includes(shanpin),
+      (item) => (item).textContent?.includes(shangpin),
     );
     if (!item) {
-      console.log('没找到商品', { shanpin });
+      console.log('没找到商品', { shangpin });
       return;
     }
 
     const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement;
     if (!checkbox) {
-      console.log('商品选择checkbox没找到', { shanpin });
+      console.log('商品选择checkbox没找到', { shangpin });
       return;
     }
 
@@ -551,12 +551,12 @@ export async function DynamicRednote(data: SyncData) {
       (item) => (item).textContent?.includes('保存'),
     ) as HTMLInputElement;
     if (!saveButton) {
-      console.log('商品选择保存按钮没找到', { shanpin });
+      console.log('商品选择保存按钮没找到', { shangpin });
       return;
     }
 
     saveButton.click();
-    console.log('笔记添加商品完成', { shanpin });
+    console.log('笔记添加商品完成', { shangpin });
   }
 
   //===================================
@@ -632,7 +632,7 @@ export async function DynamicRednote(data: SyncData) {
       }
     }
 
-    if (shanpin) {
+    if (shangpin) {
       await selelctProduct();
     }
 
