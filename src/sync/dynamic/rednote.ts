@@ -170,7 +170,7 @@ export async function DynamicRednote(data: SyncData) {
       const span = cell.querySelector('.el-date-table-cell__text');
       if (span && span.textContent?.trim() === day.toString()) {
         const td = cell.closest('td');
-        if (td && td.classList.contains('available')) {
+        if (td && !td.classList.contains('disabled')) {
           (td as HTMLElement).click();
           console.log(`✅ 日期 ${day} 已选择`);
           return true;
