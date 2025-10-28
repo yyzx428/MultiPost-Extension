@@ -164,19 +164,30 @@ export async function DynamicRednote(data: SyncData) {
   // 选择日期
   async function selectDate(day: number): Promise<boolean> {
     console.log(`选择日期 ${day}...`);
+    let count = 0;
 
-    const availableCells = document.querySelectorAll('.el-date-table-cell');
-    for (const cell of availableCells) {
-      const span = cell.querySelector('.el-date-table-cell__text');
-      if (span && span.textContent?.trim() === day.toString()) {
-        const td = cell.closest('td');
-        if (td && !td.classList.contains('disabled')) {
-          (td as HTMLElement).click();
-          console.log(`✅ 日期 ${day} 已选择`);
-          return true;
+    do {
+      const availableCells = document.querySelectorAll('.el-date-table-cell');
+      for (const cell of availableCells) {
+        const span = cell.querySelector('.el-date-table-cell__text');
+        if (span && span.textContent?.trim() === day.toString()) {
+          const td = cell.closest('td');
+          if (td && !td.classList.contains('disabled')) {
+            (td as HTMLElement).click();
+            console.log(`✅ 日期 ${day} 已选择`);
+            return true;
+          }
         }
       }
-    }
+
+      const nextMothButton = document.querySelector('button[aria-label="下个月"]');
+      if (nextMothButton) {
+        (nextMothButton as HTMLElement).click();
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      count++;
+    } while (count <= 1);
+
     console.warn(`❌ 未找到可用日期 ${day}`);
     return false;
   }
@@ -607,11 +618,11 @@ export async function DynamicRednote(data: SyncData) {
 
     uploadButton.click();
     uploadButton.dispatchEvent(new Event('click', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // 上传文件
     await uploadImages();
-    await new Promise((resolve) => setTimeout(resolve, 5000)); // 等待图片上传完成
+    await new Promise((resolve) => setTimeout(resolve, 8000)); // 等待图片上传完成
 
     // 填写内容
     await fillContent();
