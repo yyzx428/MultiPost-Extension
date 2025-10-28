@@ -106,12 +106,12 @@ export async function ShangpinRednote(data: SyncData) {
     }
 
     async function processImageError() {
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        await new Promise((resolve) => setTimeout(resolve, 5000));
         const images = document.querySelectorAll('div[class="upload-trigger"]');
 
         for (const image of images) {
             image.children[0].dispatchEvent(new Event('mouseenter', { bubbles: true }))
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await new Promise((resolve) => setTimeout(resolve, 5000));
 
             const operations = document.querySelectorAll('span[class="d-text --color-text-paragraph --size-text-small"]')
             const caijian = Array.from(operations).find((element) => element.textContent.includes("裁剪")) as HTMLElement;
@@ -212,7 +212,7 @@ export async function ShangpinRednote(data: SyncData) {
         uploadBotton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
         waitForElement('input[placeholder="输入关键词"]')
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // 等待文件处理
+        await new Promise((resolve) => setTimeout(resolve, 5000)); // 等待文件处理
         const localUploadButtons = document.querySelectorAll('span[class="d-text --color-current-typography --size-text-paragraph d-text-nowrap d-text-ellipsis d-text-nowrap"]');
         const localUploadButton = Array.from(localUploadButtons).find(
             (element) => element.textContent?.includes('上传本地图片'),
@@ -224,7 +224,7 @@ export async function ShangpinRednote(data: SyncData) {
 
         localUploadButton.click();
         localUploadButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // 等待文件处理
+        await new Promise((resolve) => setTimeout(resolve, 5000)); // 等待文件处理
 
         const fileInput = (await waitForElement('input[type="file"]')) as HTMLInputElement;
         if (!fileInput) {
@@ -251,7 +251,7 @@ export async function ShangpinRednote(data: SyncData) {
         if (dataTransfer.files.length > 0) {
             fileInput.files = dataTransfer.files;
             fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-            await new Promise((resolve) => setTimeout(resolve, 3000)); // 等待文件处理
+            await new Promise((resolve) => setTimeout(resolve, 20000)); // 等待文件处理
             console.log('文件上传操作完成');
         } else {
             console.error('没有成功添加任何文件');
@@ -300,7 +300,7 @@ export async function ShangpinRednote(data: SyncData) {
 
         // 等待页面加载
         await waitForElement('input[class="d-text"]');
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 5000));
 
         const inputs = document.querySelectorAll('input[class="d-text"]');
         if (!inputs) {
@@ -325,19 +325,20 @@ export async function ShangpinRednote(data: SyncData) {
             return;
         }
 
+        await new Promise((resolve) => setTimeout(resolve, 5000));
 
         if (!await processImageError()) {
             return;
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 20000));
 
         if (!await choiceClassify()) {
             console.log("没找到分类选项");
             return;
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 10000));
         const nextButtons = document.querySelectorAll('span[class="d-text --color-current-typography --size-text-paragraph d-text-nowrap d-text-ellipsis d-text-nowrap"]');
         const nextButton = Array.from(nextButtons).find((e) => e.textContent.includes('下一步')) as HTMLElement;
         if (!nextButton) {
@@ -349,6 +350,8 @@ export async function ShangpinRednote(data: SyncData) {
 
         await new Promise((resolve) => setTimeout(resolve, 3000));
         await processZhuTu();
+
+        await new Promise((resolve) => setTimeout(resolve, 3000));
 
         await prcessPrizeNum();
 

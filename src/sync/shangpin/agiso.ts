@@ -214,7 +214,7 @@ export async function ShangpinAgiso(data: SyncData) {
 
             // 2. 等待弹窗出现
             console.log('2. 等待弹窗出现...');
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await new Promise(resolve => setTimeout(resolve, 4000));
 
             // 3. 检查弹窗
             const modal = document.querySelector('div[class="ant-modal-content"]');
@@ -248,7 +248,7 @@ export async function ShangpinAgiso(data: SyncData) {
 
             // 6. 等待搜索结果
             console.log('5. 等待搜索结果...');
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await new Promise(resolve => setTimeout(resolve, 5000));
 
             // 7. 处理搜索结果
             console.log('6. 处理搜索结果...');

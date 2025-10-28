@@ -106,7 +106,7 @@ export async function BaiduYunPan(data: SyncData) {
 
                 confirDirButton.click();
                 confirDirButton.dispatchEvent(new Event('click', { bubbles: true }));
-                await new Promise((resolve) => setTimeout(resolve, 2000));
+                await new Promise((resolve) => setTimeout(resolve, 5000));
                 dir = document.querySelector('a[title="' + path + '"]') as HTMLElement;
             }
 
@@ -116,9 +116,11 @@ export async function BaiduYunPan(data: SyncData) {
             }
             dir.click();
             dir.dispatchEvent(new Event('click', { bubbles: true }));
+            await new Promise((resolve) => setTimeout(resolve, 3000));
         }
 
         await uploadImages();
+        await new Promise((resolve) => setTimeout(resolve, 10000));
 
         console.log("完成百度云文件上传");
     }

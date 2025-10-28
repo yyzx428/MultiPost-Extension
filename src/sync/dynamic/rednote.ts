@@ -622,7 +622,7 @@ export async function DynamicRednote(data: SyncData) {
 
     // 上传文件
     await uploadImages();
-    await new Promise((resolve) => setTimeout(resolve, 8000)); // 等待图片上传完成
+    await new Promise((resolve) => setTimeout(resolve, 30000)); // 等待图片上传完成
 
     // 填写内容
     await fillContent();
