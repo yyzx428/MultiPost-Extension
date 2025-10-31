@@ -37,41 +37,6 @@ export async function DynamicRednote(data: SyncData) {
     });
   }
 
-  // 等待元素状态变化
-  async function waitForElementCondition(
-    selector: string,
-    condition: (element: Element) => boolean,
-    timeout = 10000
-  ): Promise<Element> {
-    return new Promise((resolve, reject) => {
-      const element = document.querySelector(selector);
-      if (element && condition(element)) {
-        resolve(element);
-        return;
-      }
-
-      const observer = new MutationObserver(() => {
-        const element = document.querySelector(selector);
-        if (element && condition(element)) {
-          resolve(element);
-          observer.disconnect();
-        }
-      });
-
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['disabled', 'class']
-      });
-
-      setTimeout(() => {
-        observer.disconnect();
-        reject(new Error(`Element condition not met within ${timeout}ms`));
-      }, timeout);
-    });
-  }
-
   // 解析时间字符串
   function parseDateTime(timeStr: string) {
     // 统一时间格式，支持斜杠和横杠分隔的日期
@@ -280,8 +245,9 @@ export async function DynamicRednote(data: SyncData) {
 
       if (declareButton) {
         console.log('找到原创声明按钮，点击呼出面板...');
+        (declareButton as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
         (declareButton as HTMLElement).click();
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 5000));
       } else {
         console.error('未找到原创声明按钮');
         return;
@@ -311,7 +277,7 @@ export async function DynamicRednote(data: SyncData) {
         });
 
         checkbox.click();
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 3000));
 
         console.log('复选框勾选后的状态:', {
           checked: checkbox.checked
@@ -324,34 +290,9 @@ export async function DynamicRednote(data: SyncData) {
       // 步骤4: 等待"声明原创"按钮变为可用状态
       console.log('步骤4: 等待"声明原创"按钮变为可用状态...');
       let confirmButton: HTMLButtonElement | null = null;
-      try {
-        confirmButton = await waitForElementCondition(
-          'button.d-button.d-button-default.d-button-with-content',
-          (element) => {
-            const text = element.textContent?.trim();
-            const isDisabled = element.hasAttribute('disabled') || element.classList.contains('disabled');
-            console.log('检查按钮:', { text, isDisabled });
-            return text === '声明原创' && !isDisabled;
-          },
-          10000
-        ) as HTMLButtonElement;
-        console.log('"声明原创"按钮已变为可用状态');
-      } catch {
-        console.log('等待按钮可用状态超时，尝试查找当前按钮...');
+      confirmButton = originalContainer.querySelector('button') as HTMLButtonElement;
+      console.log('"声明原创"按钮已变为可用状态');
 
-        // 查找所有"声明原创"按钮
-        const allButtons = document.querySelectorAll('button');
-        confirmButton = Array.from(allButtons).find(btn =>
-          btn.textContent?.trim() === '声明原创'
-        ) as HTMLButtonElement;
-
-        if (confirmButton) {
-          console.log('找到"声明原创"按钮，但可能仍为禁用状态');
-        } else {
-          console.error('未找到"声明原创"按钮');
-          return;
-        }
-      }
 
       // 步骤5: 点击"声明原创"按钮
       if (confirmButton) {
