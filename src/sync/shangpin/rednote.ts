@@ -196,6 +196,30 @@ export async function ShangpinRednote(data: SyncData) {
         confirmButton.click();
     }
 
+    async function processFahuoShijian() {
+        // 1) 只在这个块里找（更安全）
+        const group = document.querySelector(
+            '.delivery-presale-container .d-radio-group'
+        );
+
+        // 2) 找到当日发货对应的 radio
+        const radio = group?.querySelector('input[type="radio"][value="-1"]');
+
+        if (radio) {
+            // 有些 UI 框架只认 click 事件
+            radio.scrollIntoView({ block: 'center' });
+            (radio as HTMLElement).click();
+            // 保险起见，再手动触发 input/change 冒泡（React/Vue 常用）
+            radio.dispatchEvent(new Event('input', { bubbles: true }));
+            radio.dispatchEvent(new Event('change', { bubbles: true }));
+
+            // 若需要同步外观（某些组件把状态挂在外层 .d-radio 上）
+            (radio.closest('.d-radio') as HTMLElement)?.click();
+        } else {
+            console.warn('没找到 value="-1" 的单选框');
+        }
+    }
+
     // 辅助函数：上传文件
     async function uploadImages() {
         await waitForElement('span[class="d-text --color-text-description-typography --size-text-small"]');
@@ -356,6 +380,11 @@ export async function ShangpinRednote(data: SyncData) {
         await prcessPrizeNum();
 
         await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        await processFahuoShijian()
+
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
         const publishButtons = document.querySelectorAll('div[class="d-button-content"]');
         const publishText = isAutoPublish ? "提交商品" : "保存草稿"
         const publishButton = Array.from(publishButtons).find((e) => e.children[0].textContent.includes(publishText)) as HTMLElement;
