@@ -307,9 +307,8 @@ export async function ShangpinRednote(data: SyncData) {
 
     if (files && files.length > 0) {
 
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        await waitForElement('h6');
-        const h6s = document.querySelectorAll('h6');
+        await new Promise((resolve) => setTimeout(resolve, 8000));
+        const h6s = document.querySelectorAll('a[class="d-text d-link --color-primary --size-text-paragraph"');
         const h6 = Array.from(h6s).find(
             (element: HTMLInputElement) => element.textContent?.includes('普通发品'),
         ) as HTMLInputElement;
