@@ -174,7 +174,7 @@ export async function ShangpinRednote(data: SyncData) {
         prizeInput.dispatchEvent(new MouseEvent('input', { bubbles: true }));
         prizeInput.dispatchEvent(new MouseEvent('blur', { bubbles: true }));
 
-        const numsInput = inputs[2]
+        const numsInput = inputs[1]
         if (!numsInput) {
             console.error("从商品数量输入框没找到")
             return;
