@@ -73,79 +73,79 @@ export async function ShangpinRednote(data: SyncData) {
      * @param timeout 超时时间（毫秒）
      * @returns Promise<boolean> 按钮是否可点击
      */
-    async function waitForButtonClickable(button: HTMLElement, timeout = 10000): Promise<boolean> {
-        return new Promise((resolve) => {
-            const startTime = Date.now();
+    // async function waitForButtonClickable(button: HTMLElement, timeout = 10000): Promise<boolean> {
+    //     return new Promise((resolve) => {
+    //         const startTime = Date.now();
 
-            const checkButton = () => {
-                // 检查按钮是否可见且未被禁用
-                const isVisible = button.offsetParent !== null;
-                const isDisabled = button.hasAttribute('disabled') ||
-                    button.classList.contains('disabled') ||
-                    button.style.pointerEvents === 'none';
-                const isClickable = !isDisabled && isVisible;
+    //         const checkButton = () => {
+    //             // 检查按钮是否可见且未被禁用
+    //             const isVisible = button.offsetParent !== null;
+    //             const isDisabled = button.hasAttribute('disabled') ||
+    //                 button.classList.contains('disabled') ||
+    //                 button.style.pointerEvents === 'none';
+    //             const isClickable = !isDisabled && isVisible;
 
-                if (isClickable) {
-                    resolve(true);
-                    return;
-                }
+    //             if (isClickable) {
+    //                 resolve(true);
+    //                 return;
+    //             }
 
-                // 检查是否超时
-                if (Date.now() - startTime > timeout) {
-                    console.log('按钮等待超时，尝试强制点击');
-                    resolve(false);
-                    return;
-                }
+    //             // 检查是否超时
+    //             if (Date.now() - startTime > timeout) {
+    //                 console.log('按钮等待超时，尝试强制点击');
+    //                 resolve(false);
+    //                 return;
+    //             }
 
-                // 继续检查
-                setTimeout(checkButton, 100);
-            };
+    //             // 继续检查
+    //             setTimeout(checkButton, 100);
+    //         };
 
-            checkButton();
-        });
-    }
+    //         checkButton();
+    //     });
+    // }
 
-    async function processImageError() {
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        const images = document.querySelectorAll('div[class="upload-trigger"]');
+    // async function processImageError() {
+    //     await new Promise((resolve) => setTimeout(resolve, 5000));
+    //     const images = document.querySelectorAll('div[class="upload-trigger"]');
 
-        for (const image of images) {
-            image.children[0].dispatchEvent(new Event('mouseenter', { bubbles: true }))
-            await new Promise((resolve) => setTimeout(resolve, 5000));
+    //     for (const image of images) {
+    //         image.children[0].dispatchEvent(new Event('mouseenter', { bubbles: true }))
+    //         await new Promise((resolve) => setTimeout(resolve, 5000));
 
-            const operations = document.querySelectorAll('span[class="d-text --color-text-paragraph --size-text-small"]')
-            const caijian = Array.from(operations).find((element) => element.textContent.includes("裁剪")) as HTMLElement;
-            if (!caijian) {
-                console.log("裁剪按钮没找到")
-                return false;
-            }
-            caijian.click();
-            caijian.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    //         const operations = document.querySelectorAll('span[class="d-text --color-text-paragraph --size-text-small"]')
+    //         const caijian = Array.from(operations).find((element) => element.textContent.includes("裁剪")) as HTMLElement;
+    //         if (!caijian) {
+    //             console.log("裁剪按钮没找到")
+    //             return false;
+    //         }
+    //         caijian.click();
+    //         caijian.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-            await new Promise((resolve) => setTimeout(resolve, 3000));
-            const confirButtons = document.querySelector('div[class="d-drawer d-drawer-right material-operas-drawer"]')
-                .querySelectorAll('span[class="d-text --color-current-typography --size-text-paragraph d-text-nowrap d-text-ellipsis d-text-nowrap"]');
-            const confirmButton = Array.from(confirButtons).find((element) => element.textContent.includes('确认')) as HTMLElement;
+    //         await new Promise((resolve) => setTimeout(resolve, 3000));
+    //         const confirButtons = document.querySelector('div[class="d-drawer d-drawer-right material-operas-drawer"]')
+    //             .querySelectorAll('span[class="d-text --color-current-typography --size-text-paragraph d-text-nowrap d-text-ellipsis d-text-nowrap"]');
+    //         const confirmButton = Array.from(confirButtons).find((element) => element.textContent.includes('确认')) as HTMLElement;
 
-            if (!confirmButton) {
-                console.log('没有找到确认按钮');
-                return false;
-            }
+    //         if (!confirmButton) {
+    //             console.log('没有找到确认按钮');
+    //             return false;
+    //         }
 
-            // 等待确认按钮可点击
-            const isClickable = await waitForButtonClickable(confirmButton, 10000);
-            if (!isClickable) {
-                console.log('确认按钮不可点击，尝试强制点击');
-            }
+    //         // 等待确认按钮可点击
+    //         const isClickable = await waitForButtonClickable(confirmButton, 10000);
+    //         if (!isClickable) {
+    //             console.log('确认按钮不可点击，尝试强制点击');
+    //         }
 
-            confirmButton.click();
-            confirmButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    //         confirmButton.click();
+    //         confirmButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-            // 等待点击操作完成
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
-        return true;
-    }
+    //         // 等待点击操作完成
+    //         await new Promise((resolve) => setTimeout(resolve, 1000));
+    //     }
+    //     return true;
+    // }
 
 
     async function processZhuTu() {
@@ -348,13 +348,13 @@ export async function ShangpinRednote(data: SyncData) {
             return;
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        await new Promise((resolve) => setTimeout(resolve, 10000));
 
-        if (!await processImageError()) {
-            return;
-        }
+        // if (!await processImageError()) {
+        //     return;
+        // }
 
-        await new Promise((resolve) => setTimeout(resolve, 20000));
+        // await new Promise((resolve) => setTimeout(resolve, 20000));
 
         if (!await choiceClassify()) {
             console.log("没找到分类选项");
