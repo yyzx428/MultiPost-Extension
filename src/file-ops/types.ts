@@ -239,6 +239,25 @@ export interface OperationLog {
     details?: unknown;
 }
 
+
+export interface GetFileListOptions {
+
+    /** 需要确保出现的文件/文件夹名（例如 ["511","510"]） */
+    needNames?: string[];
+    /** 是否尝试加载更多（滚动） */
+    autoScroll?: boolean;
+    /** 超时 */
+    timeoutMs?: number;
+    /** 每次滚动距离 */
+    step?: number;
+    /** 每次滚动后等待渲染时间 */
+    settleMs?: number;
+    /** 找不到是否抛错 */
+    throwIfNotFound?: boolean;
+    /** 需要时：滚到末尾把列表尽量收集全 */
+    loadAll?: boolean;
+};
+
 //===================================
 // 平台抽象接口
 //===================================
@@ -258,7 +277,7 @@ export abstract class BasePlatformOperator {
     abstract organize(config: OrganizeConfig): Promise<OrganizeResult>;
 
     /** 获取当前文件列表 */
-    abstract getCurrentFileList(): Promise<FileItem[]>;
+    abstract getCurrentFileList(options?: GetFileListOptions): Promise<FileItem[]>;
 
     /** 清理资源 */
     abstract cleanup(): Promise<void>;

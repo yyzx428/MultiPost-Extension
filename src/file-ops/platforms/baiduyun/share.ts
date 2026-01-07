@@ -781,7 +781,7 @@ export class BaiduYunShareHandler {
      * @returns 分享链接
      */
     private async extractShareUrl(shareText: string): Promise<string> {
-        const urlMatch = shareText.match(/https:\/\/pan\.baidu\.com\/s\/[a-zA-Z0-9]+(?:\?pwd=[a-zA-Z0-9]+)?/);
+        const urlMatch = shareText.match(/https?:\/\/pan\.baidu\.com\/s\/[A-Za-z0-9_-]+(?:\?[^\s\u4e00-\u9fa5]+)?/);
         if (urlMatch) {
             return urlMatch[0];
         }

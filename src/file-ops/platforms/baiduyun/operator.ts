@@ -13,7 +13,8 @@ import type {
     ShareConfig,
     DownloadConfig,
     OrganizeConfig,
-    OperationLog
+    OperationLog,
+    GetFileListOptions
 } from '../../types';
 import { BaiduYunNavigator } from './navigator';
 import { BaiduYunShareHandler } from './share';
@@ -61,6 +62,7 @@ export class BaiduYunOperator extends BasePlatformOperator {
         }
     }
 
+
     /**
      * 创建分享链接
      * @param config 分享配置
@@ -71,7 +73,9 @@ export class BaiduYunOperator extends BasePlatformOperator {
 
         try {
             // 获取当前文件列表
-            const currentFiles = await this.getCurrentFileList();
+            const currentFiles = await this.getCurrentFileList({
+                needNames: [...config.selection.selectByFolder || []]
+            });
 
             // 创建分享
             const result = await this.shareHandler.createShare(config, currentFiles);
@@ -95,7 +99,7 @@ export class BaiduYunOperator extends BasePlatformOperator {
      * @returns 下载结果
      */
     async download(config: DownloadConfig): Promise<DownloadResult> {
-        this.addLog('warn', '下载功能暂未实现');
+        this.addLog('warn', `下载功能暂未实现，配置: ${JSON.stringify(config)}`);
 
         // 基础实现，后续可扩展
         return {
@@ -113,7 +117,7 @@ export class BaiduYunOperator extends BasePlatformOperator {
      * @returns 整理结果
      */
     async organize(config: OrganizeConfig): Promise<OrganizeResult> {
-        this.addLog('warn', '文件整理功能暂未实现');
+        this.addLog('warn', '文件整理功能暂未实现', config);
 
         // 基础实现，后续可扩展
         return {
@@ -128,9 +132,9 @@ export class BaiduYunOperator extends BasePlatformOperator {
      * 获取当前文件列表
      * @returns 文件项数组
      */
-    async getCurrentFileList(): Promise<FileItem[]> {
+    async getCurrentFileList(options?: GetFileListOptions): Promise<FileItem[]> {
         try {
-            const files = await this.navigator.getCurrentFileList();
+            const files = await this.navigator.getCurrentFileList(options);
             this.addLog('info', `获取文件列表成功，共 ${files.length} 个项目`);
             return files;
 

@@ -3,7 +3,7 @@
  * @description 负责在百度网盘中进行路径导航操作
  */
 
-import type { NavigationResult, FileItem } from '../../types';
+import type { NavigationResult, FileItem, GetFileListOptions } from '../../types';
 import { Waiter } from '../../common/waiter';
 
 //===================================
@@ -45,6 +45,7 @@ export class BaiduYunNavigator {
             };
 
         } catch (error) {
+            console.error('导航异常:', error);
             return {
                 success: false,
                 finalPath: [],
@@ -75,6 +76,19 @@ export class BaiduYunNavigator {
 
         // 查找目标文件夹（复用现有选择器逻辑）
         let folderElement = document.querySelector(`a[title="${folderName}"]`) as HTMLElement;
+
+
+        if (!folderElement) {
+            // ✅ 先滚动加载直到目标出现在DOM里
+            await this.getCurrentFileList({
+                needNames: [folderName],
+                autoScroll: true,
+                timeoutMs: 30_000,
+                throwIfNotFound: false, // 先不抛，后面还有兜底选择器
+            });
+
+            folderElement = document.querySelector(`a[title="${folderName}"]`) as HTMLElement;
+        }
 
         if (!folderElement) {
             // 尝试其他选择器策略
@@ -160,32 +174,124 @@ export class BaiduYunNavigator {
         await this.waiter.sleep(2000);
     }
 
+    private getScrollContainer(): HTMLElement {
+        const candidates = [
+            ".wp-s-pan-table__body",
+            ".wp-s-pan-table__scroll",
+            ".wp-s-pan-table",
+            ".file-list",
+            ".grid-view",
+        ];
+
+        for (const sel of candidates) {
+            const el = document.querySelector(sel) as HTMLElement | null;
+            if (el && el.scrollHeight > el.clientHeight + 5) return el;
+        }
+        return (document.scrollingElement as HTMLElement) || document.documentElement;
+    }
+
+    private isAtBottom(container: HTMLElement): boolean {
+        return container.scrollTop + container.clientHeight >= container.scrollHeight - 2;
+    }
+
+    private listFingerprint(rows: Element[]): string {
+        // 用“行数 + 最后一行文件名”做指纹，判断滚动后列表是否真的变化
+        const last = rows[rows.length - 1];
+        const lastNameEl = last?.querySelector('a[title]') as HTMLElement | null;
+        const lastName = (lastNameEl?.getAttribute("title") || lastNameEl?.textContent || "").trim();
+        return `${rows.length}|${lastName}`.slice(0, 120);
+    }
+
+    private fileKeyOf(item: FileItem): string {
+        return `${item.type}|${item.name}`;
+    }
+
+
     /**
      * 获取当前文件列表
      * @returns 文件项数组
      */
-    async getCurrentFileList(): Promise<FileItem[]> {
-        const files: FileItem[] = [];
+    async getCurrentFileList(options?: GetFileListOptions): Promise<FileItem[]> {
+        const filesMap = new Map<string, FileItem>();
+
+        const needSet = new Set((options?.needNames ?? []).map(s => s.trim()).filter(Boolean));
+        const autoScroll = options?.autoScroll ?? (needSet.size > 0);
+        const loadAll = options?.loadAll ?? false;
+
+        const timeoutMs = options?.timeoutMs ?? 20_000;
+        const step = options?.step ?? 700;
+        const settleMs = options?.settleMs ?? 250;
+        const throwIfNotFound = options?.throwIfNotFound ?? (needSet.size > 0);
 
         try {
-            // 等待文件列表加载
             await this.waiter.waitForElement('td[class="wp-s-pan-table__td"]');
 
-            // 查找文件行
-            const fileRows = this.findFileRows();
-
-            for (const row of fileRows) {
-                const fileItem = this.parseFileRow(row);
-                if (fileItem) {
-                    files.push(fileItem);
+            // 不需要滚动：直接返回当前可见
+            if (!autoScroll && !loadAll) {
+                const rows = this.findFileRows();
+                for (const row of rows) {
+                    const item = this.parseFileRow(row);
+                    if (item) filesMap.set(this.fileKeyOf(item), item);
                 }
+                return Array.from(filesMap.values());
+            }
+
+            const container = this.getScrollContainer();
+            const endAt = Date.now() + timeoutMs;
+
+            let lastFp = "";
+            let lastTop = -1;
+
+            while (Date.now() < endAt) {
+                const rows = this.findFileRows();
+                // 采集当前可见
+                for (const row of rows) {
+                    const item = this.parseFileRow(row);
+                    if (!item) continue;
+
+                    filesMap.set(this.fileKeyOf(item), item);
+                    if (needSet.has(item.name)) needSet.delete(item.name);
+                }
+
+                // 目标已找齐
+                if (!loadAll && needSet.size === 0) break;
+
+                // 到底了就停止
+                if (this.isAtBottom(container)) break;
+
+                const fpBefore = this.listFingerprint(rows);
+                const topBefore = container.scrollTop;
+
+                // 触发懒加载
+                container.scrollTop = Math.min(topBefore + step, container.scrollHeight);
+                container.dispatchEvent(new Event("scroll", { bubbles: true }));
+
+                await this.waiter.sleep(settleMs);
+
+                const rowsAfter = this.findFileRows();
+                const fpAfter = this.listFingerprint(rowsAfter);
+                const topAfter = container.scrollTop;
+
+                // 如果滚动后既没变化也不再动，认为卡住/到底了
+                if (fpAfter === fpBefore && topAfter === topBefore) break;
+
+                // 防卡死：两次指纹都不变 & top 也不变，直接 break
+                if (fpAfter === lastFp && topAfter === lastTop) break;
+
+                lastFp = fpAfter;
+                lastTop = topAfter;
+            }
+
+            if (needSet.size > 0 && throwIfNotFound) {
+                throw new Error(`未找到目标：${Array.from(needSet).join(", ")}（已滚动到末尾或超时）`);
             }
 
         } catch (error) {
-            console.error('获取文件列表失败:', error);
+            console.error("获取文件列表失败:", error);
+            if (options?.throwIfNotFound) throw error;
         }
 
-        return files;
+        return Array.from(filesMap.values());
     }
 
     /**

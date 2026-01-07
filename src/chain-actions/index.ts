@@ -30,8 +30,8 @@ export const chainActions: Record<string, ChainActionBase> = {
         name: '百度云分享 + 小红书千帆发布',
         description: '获取百度云分享链接并在小红书千帆平台发布商品',
         execute: async (config) => {
-            const { executeChainAction } = await import('./baidu-red/chain-action');
-            return executeChainAction(config as import('./baidu-red/chain-action').ChainActionConfig);
+            const { executeChainAction } = await import('./baidu-red/red-chain-action');
+            return executeChainAction(config as import('./baidu-red/red-chain-action').ChainActionConfig);
         }
     }
 };

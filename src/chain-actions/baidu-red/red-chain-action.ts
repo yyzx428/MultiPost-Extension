@@ -455,7 +455,7 @@ export class ChainActionExecutor {
                                 window.removeEventListener('message', responseHandler);
                                 console.error('[ChainAction] 文件操作请求超时');
                                 reject(new Error('MUTLIPOST_EXTENSION_FILE_OPERATION 请求超时'));
-                            }, 60000); // 60秒超时
+                            }, 30 * 60000); // 60秒超时
                         });
                     }
 
