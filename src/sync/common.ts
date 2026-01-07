@@ -73,6 +73,8 @@ export interface ShangPinData {
   num?: string;
   files?: FileData[];
   useInfo?: string;
+  shareUrl?: string;
+  shareText?: string;
 }
 
 export interface VideoData {

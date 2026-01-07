@@ -24,6 +24,7 @@ import {
 import { executeChainActionByName, type ChainActionBase, getAvailableChainActions } from '~chain-actions';
 import { Storage } from '@plasmohq/storage';
 import cssText from 'data-text:~style.css';
+import type { ShangPinData } from '~sync/common';
 
 const storage = new Storage({ area: 'local' });
 
@@ -348,6 +349,7 @@ export default function ChainActionModal() {
                     shareConfig: Record<string, unknown>;
                 };
                 agisoProduct: { title: string; useInfo: string };
+                redProduct: ShangPinData;
             };
 
             const chainActionConfig = {
@@ -355,7 +357,8 @@ export default function ChainActionModal() {
                     paths: config.baiduShare.paths,
                     shareConfig: config.baiduShare.shareConfig,
                 },
-                agisoProduct: config.agisoProduct
+                agisoProduct: config.agisoProduct,
+                redProduct: config.redProduct
             };
 
             // 执行链式操作

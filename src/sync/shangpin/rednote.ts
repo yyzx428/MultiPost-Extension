@@ -3,7 +3,7 @@ import type { SyncData, ShangPinData } from "~sync/common";
 export async function ShangpinRednote(data: SyncData) {
 
     const { isAutoPublish } = data;
-    const { title, files, prize, num } = data.data as ShangPinData;
+    const { title, files, prize, num, shareText, shareUrl } = data.data as ShangPinData;
 
     // 辅助函数：等待元素出现
     function waitForElement(selector: string, timeout = 10000): Promise<Element> {
@@ -36,26 +36,28 @@ export async function ShangpinRednote(data: SyncData) {
 
 
     async function choiceClassify() {
-        if (!operationChoice('li[class="option"]', "个性")) {
-            return false;
-        }
+        await operationChoice('li[class="option"]', "电子资源", 0);
 
         await new Promise((resolve) => setTimeout(resolve, 2000));
-        if (!operationChoice('li[class="option"]', "数字")) {
-            return false;
-        }
 
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        if (!operationChoice('li[class="option"]', "电子资料包")) {
-            return false;
-        }
+        await operationChoice('li[class="option"]', "手抄报", 1);
+
+        // await new Promise((resolve) => setTimeout(resolve, 2000));
+        // if (!operationChoice('li[class="option"]', "电子资料包")) {
+        //     return false;
+        // }
 
         return true;
     }
 
-    async function operationChoice(path: string, labelName: string) {
+    async function operationChoice(path: string, labelName: string, index: number) {
         waitForElement(path);
-        const labels = document.querySelectorAll(path);
+        const lis = document.querySelectorAll('li[class="category-cascader-item"]')
+        if (lis.length < index) {
+            console.log(labelName + '分类没找到');
+            return false;
+        }
+        const labels = lis[index].querySelectorAll(path);
         const label = Array.from(labels).find(
             (element) => element.children[0].textContent?.includes(labelName),
         ) as HTMLElement;
@@ -184,16 +186,6 @@ export async function ShangpinRednote(data: SyncData) {
         numsInput.value = num;
         numsInput.dispatchEvent(new MouseEvent('input', { bubbles: true }));
         numsInput.dispatchEvent(new MouseEvent('blur', { bubbles: true }));
-
-
-        const confirButtons = document.querySelectorAll('span[class="d-text --color-current-typography --size-text-paragraph d-text-nowrap d-text-ellipsis d-text-nowrap"]');
-        const confirmButton = Array.from(confirButtons).find((element) => element.textContent.includes("提交商品")) as HTMLElement;
-        if (!confirmButton) {
-            console.error("提交商品按钮没找到")
-            return;
-        }
-
-        confirmButton.click();
     }
 
     async function processFahuoShijian() {
@@ -305,6 +297,33 @@ export async function ShangpinRednote(data: SyncData) {
         return true;
     }
 
+    async function processPaddingShareUrl() {
+        const inputs = document.querySelector('div[class="goods_excel-table-container"]').querySelectorAll('textarea');
+
+        const shareUrlArea = inputs[0] as HTMLTextAreaElement;
+        if (shareUrlArea) {
+            shareUrlArea.dispatchEvent(new MouseEvent('focus', { bubbles: true }));
+            shareUrlArea.value = shareUrl;
+            shareUrlArea.dispatchEvent(new MouseEvent('input', { bubbles: true }));
+            shareUrlArea.dispatchEvent(new Event("change", { bubbles: true }));
+            shareUrlArea.dispatchEvent(new MouseEvent('blur', { bubbles: true }));
+        } else {
+            console.error("从自动发货链接输入框没找到")
+        }
+
+
+        const shareTextArea = inputs[1] as HTMLTextAreaElement;
+        if (!shareTextArea) {
+            console.error("从自动发货链接输入框没找到")
+        } else {
+            shareTextArea.dispatchEvent(new MouseEvent('focus', { bubbles: true }));
+            shareTextArea.value = shareText;
+            shareTextArea.dispatchEvent(new MouseEvent('input', { bubbles: true }));
+            shareTextArea.dispatchEvent(new Event("change", { bubbles: true }));
+            shareTextArea.dispatchEvent(new MouseEvent('blur', { bubbles: true }));
+        }
+    }
+
     if (files && files.length > 0) {
 
         await new Promise((resolve) => setTimeout(resolve, 8000));
@@ -377,6 +396,10 @@ export async function ShangpinRednote(data: SyncData) {
         await new Promise((resolve) => setTimeout(resolve, 3000));
 
         await prcessPrizeNum();
+
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        await processPaddingShareUrl();
 
         await new Promise((resolve) => setTimeout(resolve, 2000));
 
