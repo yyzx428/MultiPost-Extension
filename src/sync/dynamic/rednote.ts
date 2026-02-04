@@ -5,12 +5,16 @@ export async function DynamicRednote(data: SyncData) {
   const { title, content, images, tags, originalFlag, publishTime, shangpin } = data.data as DynamicData;
 
   //===================================
-  // 工具函数
+  // 1. 基础工具函数
   //===================================
 
-  // 等待元素出现
-  async function waitForElement(selector: string, timeout = 10000): Promise<Element> {
-    return new Promise((resolve, reject) => {
+  const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+  /**
+   * 等待元素出现
+   */
+  async function waitForElement(selector: string, timeout = 10000): Promise<Element | null> {
+    return new Promise((resolve) => {
       const element = document.querySelector(selector);
       if (element) {
         resolve(element);
@@ -32,361 +36,100 @@ export async function DynamicRednote(data: SyncData) {
 
       setTimeout(() => {
         observer.disconnect();
-        reject(new Error(`Element with selector "${selector}" not found within ${timeout}ms`));
+        // 超时虽然 reject，但在业务逻辑里通常 catch 或通过 null 判断
+        resolve(null);
       }, timeout);
     });
   }
 
-  // 解析时间字符串
-  function parseDateTime(timeStr: string) {
-    // 统一时间格式，支持斜杠和横杠分隔的日期
-    const normalizedTimeStr = timeStr.replace(/\//g, '-');
-    const [datePart, timePart] = normalizedTimeStr.split(' ');
-    const [year, month, day] = datePart.split('-').map(Number);
-    const [hour, minute] = timePart.split(':').map(Number);
-    return { year, month, day, hour, minute };
+  /**
+   * 模拟 React/Vue 的输入事件 (核心修复：解决 input.value 赋值后页面不更新的问题)
+   */
+  function simulateInput(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
+    const lastValue = element.value;
+    element.value = value;
+
+    // 触发 React/Vue 的内部状态追踪器
+    const tracker = (element)._valueTracker;
+    if (tracker) {
+      tracker.setValue(lastValue);
+    }
+
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  // 校验定时发布时间范围（1小时~14天内）
-  function isValidScheduleTime(timeStr: string): boolean {
-    try {
-      const now = new Date();
-      // 统一时间格式，支持斜杠和横杠分隔的日期
-      const normalizedTimeStr = timeStr.replace(/\//g, '-');
+  /**
+   * 向编辑器插入文本 (核心修复：替代 document.execCommand)
+   */
+  function insertTextToEditor(editor: HTMLElement, text: string) {
+    editor.focus();
+    const dataTransfer = new DataTransfer();
+    dataTransfer.setData('text/plain', text);
 
-      // 确保格式为 ISO 标准格式，添加 T 分隔符
-      const isoTimeStr = normalizedTimeStr.includes('T')
-        ? normalizedTimeStr
-        : normalizedTimeStr.replace(' ', 'T');
+    const pasteEvent = new ClipboardEvent('paste', {
+      bubbles: true,
+      cancelable: true,
+      clipboardData: dataTransfer,
+    });
 
-      const target = new Date(isoTimeStr);
-
-      // 检查日期是否有效
-      if (isNaN(target.getTime())) {
-        console.error('无效的日期格式:', timeStr, '标准化后:', isoTimeStr);
-        return false;
-      }
-
-      const diffMs = target.getTime() - now.getTime();
-      const diffH = diffMs / (1000 * 60 * 60);
-
-      console.log('时间校验:', {
-        当前时间: now.toLocaleString(),
-        目标时间: timeStr,
-        标准化时间: normalizedTimeStr,
-        ISO格式: isoTimeStr,
-        解析后时间: target.toLocaleString(),
-        时间差毫秒: diffMs,
-        时间差小时: diffH,
-        是否有效: diffH >= 1 && diffH <= 14 * 24
-      });
-
-      return diffH >= 1 && diffH <= 14 * 24;
-    } catch (error) {
-      console.error('时间校验失败:', error);
-      return false;
-    }
+    editor.dispatchEvent(pasteEvent);
   }
 
   //===================================
-  // 定时发布相关函数
+  // 2. 业务逻辑函数
   //===================================
 
-  // 点击定时发布单选框
-  async function clickScheduledRadio(): Promise<boolean> {
-    console.log('点击定时发布单选框...');
-
-    const labels = document.querySelectorAll('label.el-radio');
-    for (const label of labels) {
-      const text = label.textContent?.trim();
-      if (text && text.includes('定时发布')) {
-        const input = label.querySelector('input.el-radio__original');
-        if (input) {
-          (input as HTMLElement).click();
-          console.log('✅ 定时发布单选框已点击');
-          return true;
-        }
-      }
-    }
-    console.warn('❌ 未找到定时发布单选框');
-    return false;
-  }
-
-  // 点击时间输入框
-  async function clickTimeInput(): Promise<boolean> {
-    console.log('点击时间输入框...');
-
-    const timeInput = document.querySelector('input.el-input__inner[placeholder*="日期"], input.el-input__inner[placeholder*="时间"]');
-    if (timeInput) {
-      (timeInput as HTMLElement).click();
-      console.log('✅ 时间输入框已点击');
-      return true;
-    }
-    console.warn('❌ 未找到时间输入框');
-    return false;
-  }
-
-  // 选择日期
-  async function selectDate(day: number): Promise<boolean> {
-    console.log(`选择日期 ${day}...`);
-    let count = 0;
-
-    do {
-      const availableCells = document.querySelectorAll('.el-date-table-cell');
-      for (const cell of availableCells) {
-        const span = cell.querySelector('.el-date-table-cell__text');
-        if (span && span.textContent?.trim() === day.toString()) {
-          const td = cell.closest('td');
-          if (td && !td.classList.contains('disabled')) {
-            (td as HTMLElement).click();
-            console.log(`✅ 日期 ${day} 已选择`);
-            return true;
-          }
-        }
-      }
-
-      const nextMothButton = document.querySelector('button[aria-label="下个月"]');
-      if (nextMothButton) {
-        (nextMothButton as HTMLElement).click();
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-      count++;
-    } while (count <= 1);
-
-    console.warn(`❌ 未找到可用日期 ${day}`);
-    return false;
-  }
-
-  // 填写时间
-  async function fillTimeInputs(hour: number, minute: number): Promise<boolean> {
-    console.log(`填写时间 ${hour}:${minute}...`);
-
-    const timeInput = document.querySelector('#el-id-2361-30, input[placeholder="选择时间"]');
-    if (timeInput) {
-      const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-      (timeInput as HTMLInputElement).focus();
-      (timeInput as HTMLInputElement).value = timeStr;
-      timeInput.dispatchEvent(new Event('input', { bubbles: true }));
-      timeInput.dispatchEvent(new Event('change', { bubbles: true }));
-      console.log(`✅ 时间已填写: ${timeStr}`);
-      return true;
-    }
-    console.warn('❌ 未找到时间输入字段');
-    return false;
-  }
-
-  // 点击确认按钮
-  async function clickConfirmButton(): Promise<boolean> {
-    console.log('点击确认按钮...');
-
-    const confirmButtons = document.querySelectorAll('button.el-button');
-    for (const button of confirmButtons) {
-      const span = button.querySelector('span');
-      if (span && span.textContent?.trim() === '确定') {
-        (button as HTMLElement).click();
-        console.log('✅ 确认按钮已点击');
-        return true;
-      }
-    }
-    console.warn('❌ 未找到确认按钮');
-    return false;
-  }
-
-  // 处理定时发布
-  async function handleScheduledPublish(timeStr: string): Promise<boolean> {
-    try {
-      console.log('开始设置定时发布:', timeStr);
-
-      const { year, month, day, hour, minute } = parseDateTime(timeStr);
-      console.log('解析时间:', { year, month, day, hour, minute });
-
-      // 步骤1: 点击定时发布单选框
-      if (!await clickScheduledRadio()) return false;
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // 步骤2: 点击时间输入框打开选择器
-      if (!await clickTimeInput()) return false;
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // 步骤3: 在日历中选择日期
-      if (!await selectDate(day)) return false;
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      // 步骤4: 填写时间
-      if (!await fillTimeInputs(hour, minute)) return false;
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      // 步骤5: 确认选择
-      if (!await clickConfirmButton()) return false;
-
-      console.log('✅ 定时发布设置完成');
-      return true;
-    } catch (error) {
-      console.error('❌ 定时发布设置失败:', error);
-      return false;
-    }
-  }
-
-  //===================================
-  // 原创声明相关函数
-  //===================================
-
-  // 处理原创声明
-  async function handleOriginalDeclaration(): Promise<void> {
-    try {
-      console.log('开始处理原创声明...');
-
-      // 等待页面完全加载
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // 步骤1: 点击呼出原创声明面板
-      console.log('步骤1: 呼出原创声明面板...');
-      const declareButton = document.querySelector('span[class="btn-text red"]');
-
-      if (declareButton) {
-        console.log('找到原创声明按钮，点击呼出面板...');
-        (declareButton as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-        (declareButton as HTMLElement).click();
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-      } else {
-        console.error('未找到原创声明按钮');
-        return;
-      }
-
-      // 步骤2: 等待原创声明容器出现
-      console.log('步骤2: 等待原创声明容器出现...');
-      let originalContainer: Element;
-      try {
-        originalContainer = await waitForElement('div[class="originalContainer"]', 5000);
-        console.log('原创声明容器已出现');
-      } catch {
-        console.error('等待原创声明容器超时');
-        return;
-      }
-
-      // 步骤3: 在容器中查找复选框
-      console.log('步骤3: 在原创声明容器中查找复选框...');
-      const checkbox = originalContainer.querySelector('input[type="checkbox"]') as HTMLInputElement;
-
-      if (checkbox) {
-        console.log('找到原创声明复选框，勾选...');
-        console.log('复选框状态:', {
-          checked: checkbox.checked,
-          className: checkbox.className,
-          id: checkbox.id
-        });
-
-        checkbox.click();
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-
-        console.log('复选框勾选后的状态:', {
-          checked: checkbox.checked
-        });
-      } else {
-        console.error('在原创声明容器中未找到复选框');
-        return;
-      }
-
-      // 步骤4: 等待"声明原创"按钮变为可用状态
-      console.log('步骤4: 等待"声明原创"按钮变为可用状态...');
-      let confirmButton: HTMLButtonElement | null = null;
-      confirmButton = originalContainer.querySelector('button') as HTMLButtonElement;
-      console.log('"声明原创"按钮已变为可用状态');
-
-
-      // 步骤5: 点击"声明原创"按钮
-      if (confirmButton) {
-        console.log('步骤5: 点击"声明原创"按钮...');
-        console.log('按钮信息:', {
-          text: confirmButton.textContent?.trim(),
-          className: confirmButton.className,
-          disabled: confirmButton.disabled
-        });
-
-        // 如果按钮仍然禁用，尝试强制点击
-        if (confirmButton.disabled) {
-          console.log('按钮仍为禁用状态，尝试强制点击...');
-          // 移除禁用属性并点击
-          confirmButton.disabled = false;
-          confirmButton.classList.remove('disabled');
-          confirmButton.style.pointerEvents = 'auto';
-        }
-
-        confirmButton.click();
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-      }
-
-      // 步骤6: 检查是否成功
-      console.log('步骤6: 检查原创声明是否成功...');
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // 检查原创声明容器是否消失
-      const checkContainer = document.querySelector('div[class="originalContainer"]');
-      if (checkContainer) {
-        console.log('原创声明容器仍然存在，可能需要重新处理');
-      } else {
-        console.log('原创声明容器已消失，原创声明处理成功');
-      }
-
-      console.log('原创声明处理流程完成');
-
-    } catch (error) {
-      console.error('处理原创声明时出错:', error);
-    }
-  }
-
-  //===================================
-  // 内容处理相关函数
-  //===================================
-
-  // 添加标签
+  /**
+   * 添加标签 (修复 execCommand 报错)
+   */
   async function addTags(editor: HTMLElement) {
-    if (!tags || tags.length === 0) {
-      console.log('没有标签需要添加');
-      return;
-    }
+    if (!tags || tags.length === 0) return;
 
-    // 限制最多10个标签
     const limitedTags = tags.slice(0, 10);
     console.log('开始添加标签:', limitedTags);
 
-    for (let i = 0; i < limitedTags.length; i++) {
-      const tag = limitedTags[i];
-      console.log(`添加标签 ${i + 1}/${limitedTags.length}: #${tag}`);
-
-      // 确保编辑器有焦点
+    for (const tag of limitedTags) {
       editor.focus();
-      await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // 添加#格式标签
-      const tagPasteEvent = new ClipboardEvent('paste', {
-        bubbles: true,
-        cancelable: true,
-        clipboardData: new DataTransfer(),
-      });
-      tagPasteEvent.clipboardData.setData('text/plain', ` #${tag}`);
-      editor.dispatchEvent(tagPasteEvent);
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // 1. 输入 "#" 触发标签联想菜单
+      insertTextToEditor(editor, '#');
+      await sleep(1000);
 
-      // 模拟回车键确认标签
-      const enterEvent = new KeyboardEvent('keydown', {
-        bubbles: true,
-        cancelable: true,
+      // 2. 输入标签文本
+      insertTextToEditor(editor, tag);
+      await sleep(3000); // 等待联想结果浮层出现
+
+      // 3. 模拟回车确认 (选中第一个联想结果或创建新标签)
+      editor.dispatchEvent(new KeyboardEvent('keydown', {
         key: 'Enter',
         code: 'Enter',
         keyCode: 13,
         which: 13,
-      });
-      editor.dispatchEvent(enterEvent);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
+        bubbles: true,
+        cancelable: true
+      }));
 
+      await sleep(500);
+    }
     console.log('标签添加完成');
   }
 
-  // 上传文件
+  /**
+   * 上传图片 (保持原有逻辑)
+   */
   async function uploadImages() {
-    const fileInput = (await waitForElement('input[type="file"]')) as HTMLInputElement;
+    // 尝试寻找 multiple 的 input，如果没有则找第一个
+    const inputs = document.querySelectorAll('input[type="file"]');
+    let fileInput: HTMLInputElement | null = null;
+    for (let i = 0; i < inputs.length; i++) {
+      if (inputs[i].hasAttribute('multiple')) {
+        fileInput = inputs[i] as HTMLInputElement;
+        break;
+      }
+    }
+    if (!fileInput && inputs.length > 0) fileInput = inputs[0] as HTMLInputElement;
+
     if (!fileInput) {
       console.error('未找到文件输入元素');
       return;
@@ -401,7 +144,7 @@ export async function DynamicRednote(data: SyncData) {
           throw new Error(`HTTP 错误! 状态: ${response.status}`);
         }
         const blob = await response.blob();
-        const file = new File([blob], fileInfo.name, { type: fileInfo.type });
+        const file = new File([blob], fileInfo.name || `image-${Date.now()}.jpg`, { type: fileInfo.type || 'image/jpeg' });
         dataTransfer.items.add(file);
       } catch (error) {
         console.error(`上传图片 ${fileInfo.url} 失败:`, error);
@@ -411,190 +154,349 @@ export async function DynamicRednote(data: SyncData) {
     if (dataTransfer.files.length > 0) {
       fileInput.files = dataTransfer.files;
       fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 2000)); // 等待文件处理
-      console.log('文件上传操作完成');
+      await sleep(20000);
+      console.log('文件上传事件已触发');
     } else {
       console.error('没有成功添加任何文件');
     }
   }
 
-  // 填写内容
+  /**
+   * 填写内容 (标题 + 正文)
+   */
   async function fillContent() {
-    // 填写标题
-    const titleInput = (await waitForElement('input[type="text"]')) as HTMLInputElement;
+    console.log('开始填写内容...');
+
+    // 1. 填写标题 (适配新版 d-input)
+    const titleInput = document.querySelector('input[type="text"][placeholder*="标题"]') as HTMLInputElement;
     if (titleInput) {
       const titleText = title || content?.slice(0, 20) || '';
-      titleInput.value = titleText;
-      titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+      simulateInput(titleInput, titleText);
+      console.log('标题已填写');
+    } else {
+      console.warn('❌ 未找到标题输入框');
     }
 
-    // 填写内容和标签
-    const contentEditor = (await waitForElement('div[contenteditable="true"]')) as HTMLDivElement;
+    await sleep(5000);
+
+    // 2. 填写正文 (适配新版 TipTap 编辑器)
+    // 查找包含 ProseMirror 类的 div
+    const contentEditor = document.querySelector('.ProseMirror') as HTMLElement;
+
     if (contentEditor) {
       // 先填写主要内容
-      contentEditor.focus();
-      const contentPasteEvent = new ClipboardEvent('paste', {
-        bubbles: true,
-        cancelable: true,
-        clipboardData: new DataTransfer(),
-      });
-      contentPasteEvent.clipboardData.setData('text/plain', content || '');
-      contentEditor.dispatchEvent(contentPasteEvent);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      console.log('设置内容:', content);
+      insertTextToEditor(contentEditor, content || '');
+      console.log('正文内容已设置');
+      await sleep(5000);
 
       // 添加标签
       await addTags(contentEditor);
+    } else {
+      console.warn('❌ 未找到正文编辑器 (.ProseMirror)');
     }
   }
 
-  // 选择商品
+  /**
+   * 选择商品 (适配 DevUI 弹窗)
+   */
   async function selelctProduct() {
-    const buttons = document.querySelectorAll('div[class="d-button-content"]');
-    const addButton = Array.from(buttons).find(
-      (button) => button.textContent?.includes('添加商品'),
-    ) as HTMLButtonElement;
+    console.log('开始添加商品流程...');
+
+    // 1. 点击添加入口
+    const addBtnCandidates = [
+      document.querySelector('.multi-good-select-empty-btn button'), // 空状态按钮
+      document.querySelector('.button-group-content button') // 已有商品时的按钮
+    ];
+    const addButton = addBtnCandidates.find(btn => btn !== null) as HTMLElement;
 
     if (!addButton) {
-      console.log('添加商品按钮没找到');
-      return
+      // 兜底：通过文本查找
+      const allBtns = Array.from(document.querySelectorAll('button'));
+      const textBtn = allBtns.find(b => b.textContent?.includes('添加商品') || b.textContent?.includes('关联商品'));
+      if (!textBtn) {
+        console.log('未找到添加商品入口');
+        return;
+      }
+      textBtn.click();
+    } else {
+      addButton.click();
     }
 
-
-    addButton.click();
     console.log('点击添加商品按钮');
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await sleep(2000); // 等待弹窗加载
 
-    const inputs = document.querySelectorAll('input[class="d-text"]');
-    const input = Array.from(inputs).find(
-      (item) => (item as HTMLInputElement).placeholder?.includes('搜索商品ID 或 商品名称'),
-    ) as HTMLInputElement;
-    if (!input) {
-      console.log('搜索商品框没找到');
+    // 2. 搜索商品 (适配 d-modal 内的 input)
+    const searchInput = document.querySelector('.d-modal-content input[placeholder*="搜索商品"]') as HTMLInputElement;
+    if (!searchInput) {
+      console.log('❌ 搜索商品框没找到');
       return;
     }
 
-    input.value = shangpin;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    simulateInput(searchInput, shangpin);
+    // 回车搜索
+    searchInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+    await sleep(2500); // 等待搜索结果
 
-    const items = document.querySelectorAll('div[class="good-card-container"]');
-    const item = Array.from(items).find(
-      (item) => (item).textContent?.includes(shangpin),
-    );
-    if (!item) {
-      console.log('没找到商品', { shangpin });
+    // 3. 选中商品 (.good-card-container)
+    const goodsItems = Array.from(document.querySelectorAll('.good-card-container'));
+    const targetItem = goodsItems.find(item => {
+      const text = item.textContent || '';
+      return text.includes(shangpin);
+    });
+
+    if (!targetItem) {
+      console.log('⚠️ 没找到对应关键词的商品');
+      // 关闭弹窗
+      (document.querySelector('.d-modal-close') as HTMLElement)?.click();
       return;
     }
 
-    const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const checkbox = targetItem.querySelector('.d-checkbox') as HTMLElement;
     if (!checkbox) {
-      console.log('商品选择checkbox没找到', { shangpin });
+      console.log('❌ 商品复选框没找到');
       return;
     }
 
-    checkbox.click();
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // 检查是否已选中
+    const simulator = checkbox.querySelector('.d-checkbox-simulator');
+    if (simulator && !simulator.classList.contains('checked') && simulator.classList.contains('unchecked')) {
+      checkbox.click();
+      await sleep(500);
+    }
 
+    // 4. 保存 (.d-modal-footer)
+    const saveButtons = Array.from(document.querySelectorAll('.d-modal-footer button'));
+    const saveButton = saveButtons.find(b => b.textContent?.includes('保存') || b.textContent?.includes('确定')) as HTMLElement;
 
-    const saveButtons = document.querySelectorAll('div[class="d-button-content"]');
-    const saveButton = Array.from(saveButtons).find(
-      (item) => (item).textContent?.includes('保存'),
-    ) as HTMLInputElement;
     if (!saveButton) {
-      console.log('商品选择保存按钮没找到', { shangpin });
+      console.log('❌ 商品选择保存按钮没找到');
       return;
     }
 
     saveButton.click();
-    console.log('笔记添加商品完成', { shangpin });
+    console.log('✅ 笔记添加商品完成', { shangpin });
+    await sleep(1000);
   }
 
-  //===================================
-  // 发布相关函数
-  //===================================
+  /**
+   * 原创声明 (适配 DevUI Switch)
+   */
+  async function handleOriginalDeclaration() {
+    console.log('检查原创声明...');
 
-  // 执行发布
+    // 1. 确保"更多设置"已展开
+    const collapseToggle = document.querySelector('.collapse-toggle');
+    if (collapseToggle && collapseToggle.textContent?.includes('展开')) {
+      (collapseToggle as HTMLElement).click();
+      await sleep(5000);
+    }
+
+    // 2. 查找原创开关
+    const switchTexts = Array.from(document.querySelectorAll('.custom-switch-text-content span'));
+    const originalLabel = switchTexts.find(el => el.textContent?.includes('原创') || el.textContent?.includes('声明原创'));
+
+    if (originalLabel) {
+      const wrapper = originalLabel.closest('.custom-switch-wrapper');
+      // HTML结构中 input 的 value 始终是 true，状态由 checked 属性决定
+      const checkbox = wrapper?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+
+      // 如果开关未开启
+      if (checkbox && !checkbox.checked) {
+        const clickTarget = wrapper?.querySelector('.d-switch-box') as HTMLElement || wrapper as HTMLElement;
+        clickTarget.click();
+        console.log('点击开启原创开关');
+
+        // 3. 处理权益告知弹窗 (根据最新HTML结构适配)
+        await sleep(15000); // 等待弹窗动画
+        const modal = document.querySelector('.originalContainer');
+
+        if (modal) {
+          console.log('检测到原创权益弹窗');
+
+          // 3.1 勾选“我已阅读并同意” (位于 footerLeft 内)
+          // 查找 footerLeft 下的 d-checkbox
+          const agreementCheckboxDiv = modal.querySelector('.footerLeft .d-checkbox');
+          const agreementInput = agreementCheckboxDiv?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+
+          // 检查 input.checked 属性
+          if (agreementCheckboxDiv && agreementInput && !agreementInput.checked) {
+            (agreementCheckboxDiv as HTMLElement).click();
+            console.log('勾选原创协议');
+            await sleep(5000);
+          }
+
+          // 3.2 点击“声明原创”按钮
+          // 按钮位于 .originalContainer .footer 下
+          const confirmBtn = modal.querySelector('button.custom-button.bg-red') as HTMLElement;
+          if (confirmBtn) {
+            confirmBtn.click();
+            console.log('点击确认声明原创');
+            await sleep(10000); // 等待弹窗关闭
+          } else {
+            console.warn('未找到弹窗内的声明按钮');
+          }
+        }
+      } else {
+        console.log('原创声明开关已处于开启状态');
+      }
+    } else {
+      console.warn('未找到原创声明选项');
+    }
+  }
+
+  /**
+   * 定时发布 (适配 DevUI Datepicker)
+   */
+  async function handleScheduledPublish(timeStr: string) {
+    console.log('配置定时发布...');
+
+    // 1. 开启定时发布开关
+    const switchTexts = Array.from(document.querySelectorAll('.custom-switch-text-content span'));
+    const timerLabel = switchTexts.find(el => el.textContent?.includes('定时发布'));
+
+    if (!timerLabel) {
+      console.error('❌ 未找到定时发布选项');
+      return false;
+    }
+
+    const wrapper = timerLabel.closest('.custom-switch-wrapper');
+    const checkbox = wrapper?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+
+    if (wrapper && checkbox && !checkbox.checked) {
+      const clickTarget = wrapper.querySelector('.d-switch-box') as HTMLElement || wrapper;
+      (clickTarget as HTMLInputElement).click();
+      console.log('定时发布开关已开启');
+      await sleep(500);
+    }
+
+    // 2. 填写时间
+    const dateInput = document.querySelector('.date-picker-container input.d-text') as HTMLInputElement;
+    if (dateInput) {
+      // 格式化时间: "2026/02/04 15:23:00" -> "2026-02-04 15:23"
+      const formattedTime = timeStr.replace(/\//g, '-').slice(0, 16);
+      console.log(`写入定时时间: ${formattedTime}`);
+
+      dateInput.click(); // 激活
+      await sleep(200);
+      simulateInput(dateInput, formattedTime); // 写入
+      await sleep(200);
+
+      // 确认
+      dateInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+      document.body.click(); // 关闭弹窗
+      return true;
+    } else {
+      console.error('❌ 未找到时间输入框');
+      return false;
+    }
+  }
+
+  /**
+   * 执行发布
+   */
   async function publish() {
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    const buttons = document.querySelectorAll('button');
-    const publishButton = Array.from(buttons).find(
-      (button) => button.textContent?.includes('发布'),
-    ) as HTMLButtonElement;
+    console.log('准备发布...');
+    await sleep(2000);
 
-    if (publishButton) {
-      // 等待按钮可用
-      while (publishButton.getAttribute('aria-disabled') === 'true') {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        console.log('等待发布按钮可用...');
+    // 查找红色发布按钮 (HTML: button.custom-button.bg-red)
+    const publishBtns = Array.from(document.querySelectorAll('button.custom-button.bg-red'));
+    // 过滤掉不可见的或者禁用的
+    const validBtn = publishBtns.find(btn => {
+      const style = window.getComputedStyle(btn);
+      return style.display !== 'none' && !btn.hasAttribute('disabled');
+    }) as HTMLElement;
+
+    if (validBtn) {
+      // 简单防抖检查，等待按钮变为可用状态（有些上传需要时间）
+      let checkCount = 0;
+      while (validBtn.classList.contains('disabled') || validBtn.getAttribute('aria-disabled') === 'true') {
+        if (checkCount > 10) break;
+        console.log('发布按钮禁用中，等待...');
+        await sleep(1000);
+        checkCount++;
       }
 
-      console.log('点击发布按钮');
-      publishButton.click();
-      await new Promise((resolve) => setTimeout(resolve, 10000));
-      // window.location.href = 'https://creator.xiaohongshu.com/new/note-manager';
+      validBtn.click();
+      console.log('🚀 已点击发布按钮');
+      await sleep(5000);
+    } else {
+      console.error('❌ 未找到有效的发布按钮');
     }
   }
 
   //===================================
-  // 主执行流程
+  // 3. 主流程执行
   //===================================
 
   if (images && images.length > 0) {
-    // 等待页面加载
-    await waitForElement('span[class="title"]');
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // 1. 等待页面加载并找到上传入口
+    // 尝试寻找 "发布笔记" 按钮 (适配新版侧边栏/顶部栏)
+    const publishEntry = (await waitForElement('.btn-text')) || (await waitForElement('.i-icon-note-b'));
 
-    // 点击上传图文按钮
-    const uploadButtons = document.querySelectorAll('span[class="title"]');
-    const uploadButton = Array.from(uploadButtons).find(
-      (element) => element.textContent?.includes('上传图文'),
-    ) as HTMLElement;
+    // 如果已经在发布页 (有 img-list)，则不需要点击入口
+    const isPublishPage = document.querySelector('.img-list');
 
-    if (!uploadButton) {
-      console.error('未找到上传图文按钮');
-      return;
+    if (!isPublishPage && publishEntry) {
+      // 如果按钮文本是 "发布笔记"，点击它
+      const btnText = document.querySelector('.d-topbar .btn-text');
+      if (btnText && btnText.textContent?.includes('发布笔记')) {
+        (btnText as HTMLElement).click();
+      }
+      await sleep(2000);
     }
 
-    uploadButton.click();
-    uploadButton.dispatchEvent(new Event('click', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // 2. 点击 "上传图文" (如果存在这个切换选项)
+    // 新版可能默认就是图文，或者 tab 切换
+    const tabs = Array.from(document.querySelectorAll('.tab-item, .title'));
+    const imgTab = tabs.find(t => t.textContent?.includes('上传图文'));
+    if (imgTab) {
+      (imgTab as HTMLElement).click();
+      await sleep(1000);
+    }
 
-    // 上传文件
+    // 步骤 1: 上传图片
     await uploadImages();
-    await new Promise((resolve) => setTimeout(resolve, 30000)); // 等待图片上传完成
 
-    // 填写内容
+    // 步骤 2: 等待图片渲染 (轮询检测)
+    console.log('等待图片渲染...');
+    let uploadedCount = 0;
+    for (let i = 0; i < 60; i++) {
+      // .img-preview-area 下的 .img-container 数量
+      uploadedCount = document.querySelectorAll('.img-preview-area .img-container').length;
+      if (uploadedCount >= images.length) break;
+      await sleep(1000);
+    }
+    console.log(`图片上传检测完成: ${uploadedCount} 张`);
+
+    // 缓冲一下，确保DOM稳定
+    await sleep(30000);
+
+    // 步骤 3: 填写内容
     await fillContent();
 
-    // 处理定时发布
-    if (publishTime) {
-      console.log('检测到定时发布时间:', publishTime);
-
-      // 校验时间范围
-      if (!isValidScheduleTime(publishTime)) {
-        console.error('❌ 定时发布时间必须在1小时~14天内，跳过定时发布设置');
-        return;
-      }
-
-      if (!await handleScheduledPublish(publishTime)) {
-        console.error('定时发布设置失败');
-        return;
-      }
-    }
-
-    // 处理原创声明
-    if (originalFlag) {
-      console.log('检测到原创声明标志，开始处理原创声明...');
-      await handleOriginalDeclaration();
-    }
-
+    // 步骤 4: 商品
     if (shangpin) {
       await selelctProduct();
     }
 
-    // 自动发布
+    // 步骤 5: 原创声明
+    if (originalFlag) {
+      await handleOriginalDeclaration();
+    }
+
+    // 步骤 6: 定时发布
+    if (publishTime) {
+      // 简单校验时间有效性 (假设是未来时间)
+      const targetTime = new Date(publishTime).getTime();
+      const now = Date.now();
+      if (targetTime > now + 5 * 60 * 1000) { // 至少5分钟后
+        await handleScheduledPublish(publishTime);
+      } else {
+        console.warn('定时时间无效或过近，跳过定时设置');
+      }
+    }
+
+    // 步骤 7: 发布
     if (data.isAutoPublish) {
       await publish();
     }
