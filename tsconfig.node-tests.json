@@ -17,5 +17,5 @@
     },
     "types": ["node", "chrome"]
   },
-  "include": ["src/background/index.ts", "src/background/services/**/*.ts", "tests-node/**/*.ts"]
+  "include": ["src/background/index.ts", "src/background/services/**/*.ts", "src/background/messages/**/*.ts", "tests-node/**/*.ts"]
 }
