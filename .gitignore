@@ -8,6 +8,9 @@
 
 # testing
 /coverage
+.node-test-dist/
+.pnpm-cache/
+_tmp_*
 
 # production
 /build

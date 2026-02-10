@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "rootDir": ".",
+    "outDir": ".node-test-dist",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "baseUrl": ".",
+    "paths": {
+      "~sync/common": ["tests-node/stubs/sync/common.ts"],
+      "~sync/account": ["tests-node/stubs/sync/account.ts"],
+      "~utils/config": ["tests-node/stubs/utils/config.ts"]
+    },
+    "types": ["node", "chrome"]
+  },
+  "include": ["src/background/index.ts", "src/background/services/**/*.ts", "tests-node/**/*.ts"]
+}

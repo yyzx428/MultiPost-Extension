@@ -11,6 +11,8 @@
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "lint:staged": "lint-staged",
+    "test": "pnpm exec tsc -p tsconfig.node-tests.json && node .node-test-dist/tests-node/run.js",
+    "test:watch": "pnpm exec tsc -p tsconfig.node-tests.json --watch",
     "prepare": "husky"
   },
   "dependencies": {
