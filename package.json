@@ -55,6 +55,7 @@
     "default_locale": "zh_CN",
     "host_permissions": [
       "https://*/*",
+      "http://47.106.138.233/*",
       "http://127.0.0.1/*",
       "http://localhost/*"
     ],

@@ -78,7 +78,8 @@ export function installBackgroundModuleMocks(opts: ModuleMockOptions) {
     // Ensure starter() doesn't run network code on import, but preserve other exports.
     if (isFromBackgroundIndex(parent) && request === "./services/api") {
       const actual = originalLoad(request, parent, isMain)
-      return { ...actual, starter: () => {} }
+      const apiServiceMock = (globalThis as any).__TEST_API_SERVICE_MOCK__ || {}
+      return { ...actual, starter: () => {}, ...apiServiceMock }
     }
 
     // Fall back to normal loading.

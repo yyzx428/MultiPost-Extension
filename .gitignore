@@ -1,4 +1,8 @@
 .plasmo
+.chrome*/
+.chrome*
+.edge*/
+.debug-profile/
 
 # dependencies
 /node_modules

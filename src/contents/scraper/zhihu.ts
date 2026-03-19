@@ -1,4 +1,4 @@
-import { ArticleData } from './default';
+import type { ArticleData } from './default';
 import { preprocessor } from './preprocessor';
 
 export default async function scrapeZhihuContent(): Promise<ArticleData | undefined> {

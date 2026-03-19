@@ -996,6 +996,141 @@
     "message": "$1 秒后自动关闭",
     "description": "发布页面自动关闭倒计时文本"
   },
+  "publishPreparingTask": {
+    "message": "正在准备发布任务"
+  },
+  "publishPrefetchArticleAssets": {
+    "message": "正在预取文章资源"
+  },
+  "publishPrefetchDynamicAssets": {
+    "message": "正在预取图文资源"
+  },
+  "publishPrefetchVideoAssets": {
+    "message": "正在预取视频资源"
+  },
+  "publishPrefetchPodcastAssets": {
+    "message": "正在预取播客资源"
+  },
+  "publishPrefetchCloudFiles": {
+    "message": "正在预取云盘文件"
+  },
+  "publishPrefetchProductFiles": {
+    "message": "正在预取商品资源"
+  },
+  "publishReloadTabInfoMissing": {
+    "message": "找不到要重载的标签页信息"
+  },
+  "publishOpeningPlatformTabs": {
+    "message": "正在打开平台标签页"
+  },
+  "publishExecutionInProgressFailed": {
+    "message": "执行中，已有 $1 个失败"
+  },
+  "publishExecutionInProgressSucceeded": {
+    "message": "执行中，已成功 $1 / $2"
+  },
+  "publishExecutionCompleted": {
+    "message": "执行完成"
+  },
+  "publishExecutionFailed": {
+    "message": "执行失败"
+  },
+  "publishReadTaskFailed": {
+    "message": "无法读取发布任务"
+  },
+  "publishAssetPreflightFailed": {
+    "message": "资源预处理失败"
+  },
+  "publishAutoCloseTooltip": {
+    "message": "仅在发布成功后才会自动关闭。"
+  },
+  "publishSecondsUnit": {
+    "message": "秒"
+  },
+  "publishCloseTabsTogether": {
+    "message": "同时关闭标签页"
+  },
+  "publishCloseTabsTogetherTooltip": {
+    "message": "关闭当前窗口时，一并关闭已打开的平台标签页。"
+  },
+  "publishStatusPending": {
+    "message": "等待中"
+  },
+  "publishStatusRunning": {
+    "message": "执行中"
+  },
+  "publishStatusSuccess": {
+    "message": "成功"
+  },
+  "publishStatusFailed": {
+    "message": "失败"
+  },
+  "publishStatusTimeout": {
+    "message": "超时"
+  },
+  "publishErrorLoginRequired": {
+    "message": "$1 需要先登录"
+  },
+  "publishErrorAssetPreflightFailed": {
+    "message": "资源预处理失败"
+  },
+  "publishErrorScriptInjectionFailed": {
+    "message": "脚本注入失败"
+  },
+  "publishErrorPlatformTimeout": {
+    "message": "平台执行超时"
+  },
+  "publishErrorTabClosed": {
+    "message": "平台标签页已关闭"
+  },
+  "publishErrorNoSuccessSignal": {
+    "message": "未检测到平台成功信号"
+  },
+  "publishErrorBaiduShareInvalid": {
+    "message": "百度云分享结果无效"
+  },
+  "publishErrorPersistFailed": {
+    "message": "结果回写失败"
+  },
+  "chainActionTitle": {
+    "message": "链式动作"
+  },
+  "chainActionPreparing": {
+    "message": "正在准备链式动作"
+  },
+  "chainActionLoadFailed": {
+    "message": "无法加载链式动作"
+  },
+  "chainActionExecuting": {
+    "message": "正在执行链式动作"
+  },
+  "chainActionCompleted": {
+    "message": "链式动作完成"
+  },
+  "chainActionFailed": {
+    "message": "链式动作失败"
+  },
+  "chainActionLogs": {
+    "message": "日志"
+  },
+  "chainActionAutoCloseTooltip": {
+    "message": "仅在执行成功后才会自动关闭。"
+  },
+  "chainActionLoadedLog": {
+    "message": "已加载链式动作：$1"
+  },
+  "chainActionFinishedLog": {
+    "message": "链式动作执行结束，状态：$1"
+  },
+  "chainActionStageBaiduShare": {
+    "message": "百度分享"
+  },
+  "chainActionStageRedPublish": {
+    "message": "小红书发布"
+  },
+  "chainActionStageAgisoPublish": {
+    "message": "阿奇索发布"
+  },
   "platformBaiduYun": {
     "message": "百度云盘"
   },

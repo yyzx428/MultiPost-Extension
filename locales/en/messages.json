@@ -1022,6 +1022,141 @@
     "message": "Auto close in $1 seconds",
     "description": "Auto close countdown text for publish page"
   },
+  "publishPreparingTask": {
+    "message": "Preparing publish task"
+  },
+  "publishPrefetchArticleAssets": {
+    "message": "Prefetching article assets"
+  },
+  "publishPrefetchDynamicAssets": {
+    "message": "Prefetching dynamic assets"
+  },
+  "publishPrefetchVideoAssets": {
+    "message": "Prefetching video assets"
+  },
+  "publishPrefetchPodcastAssets": {
+    "message": "Prefetching podcast assets"
+  },
+  "publishPrefetchCloudFiles": {
+    "message": "Prefetching cloud files"
+  },
+  "publishPrefetchProductFiles": {
+    "message": "Prefetching product files"
+  },
+  "publishReloadTabInfoMissing": {
+    "message": "Unable to find tab information for reload"
+  },
+  "publishOpeningPlatformTabs": {
+    "message": "Opening platform tabs"
+  },
+  "publishExecutionInProgressFailed": {
+    "message": "Execution in progress, $1 failed"
+  },
+  "publishExecutionInProgressSucceeded": {
+    "message": "Execution in progress, $1 / $2 succeeded"
+  },
+  "publishExecutionCompleted": {
+    "message": "Execution completed"
+  },
+  "publishExecutionFailed": {
+    "message": "Execution failed"
+  },
+  "publishReadTaskFailed": {
+    "message": "Unable to read publish task"
+  },
+  "publishAssetPreflightFailed": {
+    "message": "Asset preflight failed"
+  },
+  "publishAutoCloseTooltip": {
+    "message": "Auto close only runs after a successful publish."
+  },
+  "publishSecondsUnit": {
+    "message": "sec"
+  },
+  "publishCloseTabsTogether": {
+    "message": "Close tabs together"
+  },
+  "publishCloseTabsTogetherTooltip": {
+    "message": "Close all opened platform tabs when this window closes."
+  },
+  "publishStatusPending": {
+    "message": "Pending"
+  },
+  "publishStatusRunning": {
+    "message": "Running"
+  },
+  "publishStatusSuccess": {
+    "message": "Success"
+  },
+  "publishStatusFailed": {
+    "message": "Failed"
+  },
+  "publishStatusTimeout": {
+    "message": "Timeout"
+  },
+  "publishErrorLoginRequired": {
+    "message": "$1 login required"
+  },
+  "publishErrorAssetPreflightFailed": {
+    "message": "Asset preflight failed"
+  },
+  "publishErrorScriptInjectionFailed": {
+    "message": "Script injection failed"
+  },
+  "publishErrorPlatformTimeout": {
+    "message": "Platform timed out"
+  },
+  "publishErrorTabClosed": {
+    "message": "Platform tab was closed"
+  },
+  "publishErrorNoSuccessSignal": {
+    "message": "No success signal detected"
+  },
+  "publishErrorBaiduShareInvalid": {
+    "message": "Invalid Baidu share result"
+  },
+  "publishErrorPersistFailed": {
+    "message": "Failed to persist result"
+  },
+  "chainActionTitle": {
+    "message": "Chain Action"
+  },
+  "chainActionPreparing": {
+    "message": "Preparing chain action"
+  },
+  "chainActionLoadFailed": {
+    "message": "Unable to load chain action"
+  },
+  "chainActionExecuting": {
+    "message": "Executing chain action"
+  },
+  "chainActionCompleted": {
+    "message": "Chain action completed"
+  },
+  "chainActionFailed": {
+    "message": "Chain action failed"
+  },
+  "chainActionLogs": {
+    "message": "Logs"
+  },
+  "chainActionAutoCloseTooltip": {
+    "message": "Auto close only runs after success."
+  },
+  "chainActionLoadedLog": {
+    "message": "Loaded chain action: $1"
+  },
+  "chainActionFinishedLog": {
+    "message": "Chain action finished with status: $1"
+  },
+  "chainActionStageBaiduShare": {
+    "message": "Baidu Share"
+  },
+  "chainActionStageRedPublish": {
+    "message": "Rednote Publish"
+  },
+  "chainActionStageAgisoPublish": {
+    "message": "Agiso Publish"
+  },
   "platformBaiduYun": {
     "message": "Baidu yun pan"
   },

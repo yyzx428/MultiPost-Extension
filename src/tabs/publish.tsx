@@ -1,748 +1,703 @@
-import '~style.css';
-import React, { useEffect, useState, useRef } from 'react';
-import { HeroUIProvider, Progress, Button, Switch, Tooltip, NumberInput } from '@heroui/react';
-import { RefreshCw, X } from 'lucide-react';
-import cssText from 'data-text:~style.css';
+import "~style.css"
+
+import { Storage } from "@plasmohq/storage"
+import { Button, HeroUIProvider, NumberInput, Progress, Switch, Tooltip } from "@heroui/react"
+import { RefreshCw, X } from "lucide-react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
+
+import cssText from "data-text:~style.css"
+
+import type { PublishExecutionResult } from "~types/execution"
 import {
   type ArticleData,
   type DynamicData,
   type FileData,
-  type PodcastData,
-  type SyncData,
-  type VideoData,
-  type SyncDataPlatform,
   injectScriptsToTabs,
-  type YunPanData,
+  type PodcastData,
   type ShangPinData,
-} from '~sync/common';
-import { Storage } from '@plasmohq/storage';
+  type SyncData,
+  type SyncDataPlatform,
+  type VideoData,
+  type YunPanData
+} from "~sync/common"
+import { prepareFileStrict, prepareFilesStrict } from "./publish-assets"
 
-const storage = new Storage({
-  area: 'local',
-});
-const AUTO_CLOSE_KEY = 'publish-auto-close';
-const AUTO_CLOSE_DELAY_KEY = 'publish-auto-close-delay';
-const SYNC_CLOSE_TABS_KEY = 'publish-sync-close-tabs';
-const DEFAULT_AUTO_CLOSE_DELAY = 3 * 60; // 3 minutes in seconds
+const storage = new Storage({ area: "local" })
 
-export function getShadowContainer() {
-  return document.querySelector('#test-shadow').shadowRoot.querySelector('#plasmo-shadow-container');
+const AUTO_CLOSE_KEY = "publish-auto-close"
+const AUTO_CLOSE_DELAY_KEY = "publish-auto-close-delay"
+const SYNC_CLOSE_TABS_KEY = "publish-sync-close-tabs"
+const DEFAULT_AUTO_CLOSE_DELAY = 120
+
+const PLATFORM_MESSAGE_KEY_MAP: Record<string, string> = {
+  AGISO: "platformAgiso",
+  BAIDUYUN: "platformBaiduYun",
+  BAIJIAHAO: "platformBaijiahao",
+  BILIBILI: "platformBilibili",
+  BLUESKY: "platformBluesky",
+  DOUYIN: "platformDouyin",
+  EASTMONEY: "platformEastmoney",
+  REDNOTE: "platformRednote",
+  TOUTIAO: "platformToutiao",
+  WEIBO: "platformWeibo",
+  WEIXIN: "platformWeixin",
+  X: "platformX"
 }
 
-export const getShadowHostId = () => 'test-shadow';
+function t(key: string, fallback: string, substitutions?: string | number | Array<string | number>) {
+  const payload =
+    substitutions === undefined
+      ? undefined
+      : Array.isArray(substitutions)
+        ? substitutions.map((item) => String(item))
+        : String(substitutions)
+
+  const message = chrome.i18n.getMessage(key, payload as string | string[] | undefined)
+  return message || fallback
+}
+
+function formatPlatformName(platformName: string) {
+  const tokens = platformName
+    .split("_")
+    .map((item) => item.trim().toUpperCase())
+    .filter(Boolean)
+    .reverse()
+
+  const localeKey = tokens.map((token) => PLATFORM_MESSAGE_KEY_MAP[token]).find(Boolean)
+  return localeKey ? t(localeKey, platformName) : platformName
+}
+
+function formatStatusLabel(status: PlatformProgressItem["status"] | PublishProgressPayload["status"]) {
+  switch (status) {
+    case "pending":
+      return t("publishStatusPending", "等待中")
+    case "running":
+    case "RUNNING":
+      return t("publishStatusRunning", "执行中")
+    case "success":
+    case "SUCCESS":
+    case "COMPLETED":
+      return t("publishStatusSuccess", "成功")
+    case "failed":
+    case "FAILED":
+      return t("publishStatusFailed", "失败")
+    case "timeout":
+    case "TIMEOUT":
+      return t("publishStatusTimeout", "超时")
+    default:
+      return status
+  }
+}
+
+function formatErrorMessage(item: Pick<PlatformProgressItem, "platformName" | "errorCode" | "errorMessage">) {
+  const platformLabel = formatPlatformName(item.platformName)
+  switch (item.errorCode) {
+    case "LOGIN_REQUIRED":
+      return t("publishErrorLoginRequired", "$1 需要先登录", platformLabel)
+    case "ASSET_PREFLIGHT_FAILED":
+      return t("publishErrorAssetPreflightFailed", "资源预处理失败")
+    case "SCRIPT_INJECTION_FAILED":
+      return t("publishErrorScriptInjectionFailed", "脚本注入失败")
+    case "PLATFORM_TIMEOUT":
+      return t("publishErrorPlatformTimeout", "平台执行超时")
+    case "TAB_CLOSED":
+      return t("publishErrorTabClosed", "平台标签页已关闭")
+    case "REDNOTE_NO_SUCCESS_SIGNAL":
+      return t("publishErrorNoSuccessSignal", "未检测到平台成功信号")
+    case "BAIDUYUN_SHARE_RESULT_INVALID":
+      return t("publishErrorBaiduShareInvalid", "百度云分享结果无效")
+    case "TASK_RESULT_PERSIST_FAILED":
+      return t("publishErrorPersistFailed", "结果回写失败")
+    default:
+      return item.errorMessage
+  }
+}
+
+function createPublishStartError(message: string, code?: string) {
+  const error = new Error(message)
+  if (code) error.name = code
+  return error
+}
+
+type PlatformProgressItem = {
+  platformName: string
+  status: "pending" | "running" | "success" | "failed" | "timeout" | "SUCCESS" | "FAILED" | "TIMEOUT"
+  publishUrl?: string
+  errorCode?: string
+  errorMessage?: string
+  startedAt?: string
+  finishedAt?: string
+  tabId?: number
+}
+
+type PublishProgressPayload = {
+  traceId?: string
+  status: "RUNNING" | "COMPLETED" | "FAILED"
+  totalPlatforms: number
+  successCount: number
+  failureCount: number
+  results: PlatformProgressItem[]
+}
+
+export function getShadowContainer() {
+  return document.querySelector("#test-shadow")?.shadowRoot?.querySelector("#plasmo-shadow-container")
+}
+
+export const getShadowHostId = () => "test-shadow"
 
 export const getStyle = () => {
-  const style = document.createElement('style');
-  style.textContent = cssText;
-  return style;
-};
+  const style = document.createElement("style")
+  style.textContent = cssText
+  return style
+}
 
-// 聚焦到主窗口的函数
-const focusMainWindow = async () => {
-  const windows = await chrome.windows.getAll();
-  const mainWindow = windows.find((window) => window.type === 'normal');
+async function focusMainWindow() {
+  const windows = await chrome.windows.getAll()
+  const mainWindow = windows.find((windowInfo) => windowInfo.type === "normal")
   if (mainWindow?.id) {
-    await chrome.windows.update(mainWindow.id, { focused: true });
+    await chrome.windows.update(mainWindow.id, { focused: true })
   }
-};
+}
 
-const getTitleFromData = (data: SyncData) => {
-  const { data: contentData } = data;
-  if ('content' in contentData) {
-    return contentData.title || contentData.content;
+function getTitleFromData(data: SyncData) {
+  const contentData = data.data
+  if ("content" in contentData) return contentData.title || contentData.content
+  return contentData.title
+}
+
+async function processArticle(data: SyncData): Promise<SyncData> {
+  const content = data.data as ArticleData
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(content.htmlContent, "text/html")
+  const imgElements = Array.from(doc.getElementsByTagName("img"))
+  const processedImages: FileData[] = []
+  let processedMarkdownContent = content.markdownContent
+
+  for (const img of imgElements) {
+    const originalUrl = img.src
+    if (!originalUrl || originalUrl.startsWith("blob:")) continue
+
+    const sourceFile =
+      content.images?.find((item) => item.url === originalUrl) ||
+      ({ name: originalUrl.split("/").pop() || "image", url: originalUrl } satisfies FileData)
+    const processed = await prepareFileStrict(sourceFile, { inlineMode: "always" })
+    img.src = processed.url
+    processedImages.push(processed)
+
+    const escapedUrl = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    processedMarkdownContent = processedMarkdownContent.replace(new RegExp(escapedUrl, "g"), processed.url)
   }
-  return contentData.title;
-};
+
+  return {
+    ...data,
+    data: {
+      ...content,
+      htmlContent: doc.documentElement.outerHTML,
+      markdownContent: processedMarkdownContent,
+      images: processedImages,
+      cover: await prepareFileStrict(content.cover, { inlineMode: "always" })
+    }
+  }
+}
+
+async function processDynamic(data: SyncData): Promise<SyncData> {
+  const content = data.data as DynamicData
+  const images = await prepareFilesStrict(content.images || [], { inlineMode: "always" })
+  const videos = await prepareFilesStrict(content.videos || [], { inlineMode: "unsafe-only" })
+  return {
+    ...data,
+    data: {
+      ...content,
+      images,
+      videos
+    }
+  }
+}
+
+async function processPodcast(data: SyncData): Promise<SyncData> {
+  const content = data.data as PodcastData
+  return {
+    ...data,
+    data: {
+      ...content,
+      audio: await prepareFileStrict(content.audio, { inlineMode: "unsafe-only" })
+    }
+  }
+}
+
+async function processVideo(data: SyncData): Promise<SyncData> {
+  const content = data.data as VideoData
+  return {
+    ...data,
+    data: {
+      ...content,
+      video: await prepareFileStrict(content.video, { inlineMode: "unsafe-only" })
+    }
+  }
+}
+
+async function processYunPan(data: SyncData): Promise<SyncData> {
+  const content = data.data as YunPanData
+  const files = await prepareFilesStrict(content.files || [], { inlineMode: "always" })
+
+  return {
+    ...data,
+    data: {
+      ...content,
+      files
+    }
+  }
+}
+
+async function processShangPin(data: SyncData): Promise<SyncData> {
+  const content = data.data as ShangPinData
+  return {
+    ...data,
+    data: {
+      ...content,
+      files: await prepareFilesStrict(content.files || [], { inlineMode: "always" })
+    }
+  }
+}
 
 export default function Publish() {
-  const [title, setTitle] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState<boolean>(true);
-  const [data, setData] = useState<SyncData | null>(null);
-  const [errors, setErrors] = useState<string[]>([]);
-  const [publishedTabs, setPublishedTabs] = useState<
-    Array<{
-      tab: chrome.tabs.Tab;
-      platformInfo: SyncDataPlatform;
-    }>
-  >([]);
-  const [autoClose, setAutoClose] = useState(true);
-  const [syncCloseTabs, setSyncCloseTabs] = useState(false);
-  const [countdown, setCountdown] = useState<number>(0);
-  const [autoCloseDelay, setAutoCloseDelay] = useState<number>(DEFAULT_AUTO_CLOSE_DELAY);
-  const autoCloseTimerRef = useRef<number>();
-  const countdownTimerRef = useRef<number>();
-  const sysnCloseTabsRef = useRef<boolean>(false);
-  const publishedTabsRef = useRef<Array<{
-    tab: chrome.tabs.Tab;
-    platformInfo: SyncDataPlatform;
-  }>>([]);
+  const [title, setTitle] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string>(() => t("publishPreparingTask", "正在准备发布任务"))
+  const [isProcessing, setIsProcessing] = useState(true)
+  const [syncData, setSyncData] = useState<SyncData | null>(null)
+  const [errors, setErrors] = useState<string[]>([])
+  const [progress, setProgress] = useState<PublishProgressPayload | null>(null)
+  const [result, setResult] = useState<PublishExecutionResult | null>(null)
+  const [publishedTabs, setPublishedTabs] = useState<Array<{ tab: chrome.tabs.Tab; platformInfo: SyncDataPlatform }>>([])
+  const [autoClose, setAutoClose] = useState(true)
+  const [syncCloseTabs, setSyncCloseTabs] = useState(true)
+  const [countdown, setCountdown] = useState(0)
+  const [autoCloseDelay, setAutoCloseDelay] = useState(DEFAULT_AUTO_CLOSE_DELAY)
+  const autoCloseTimerRef = useRef<number>()
+  const countdownTimerRef = useRef<number>()
+  const syncCloseTabsRef = useRef(false)
+  const publishedTabsRef = useRef<Array<{ tab: chrome.tabs.Tab; platformInfo: SyncDataPlatform }>>([])
 
-  async function processArticle(data: SyncData): Promise<SyncData> {
-    setNotice(chrome.i18n.getMessage('processingContent'));
-    const parser = new DOMParser();
-    const { htmlContent, markdownContent, images, cover } = data.data as ArticleData;
-    const doc = parser.parseFromString(htmlContent, 'text/html');
-    const imgElements = Array.from(doc.getElementsByTagName('img')) as HTMLImageElement[];
-    const blobUrls: string[] = [];
+  const platformResults = useMemo(() => {
+    if (result?.results?.length) return result.results
+    return progress?.results || []
+  }, [progress, result])
 
-    const processedImages: FileData[] = [];
-    let processedHtmlContent = htmlContent;
-    let processedMarkdownContent = markdownContent;
-    let processedCoverImage: FileData | null = null;
-
-    // 处理所有图片
-    if (Array.isArray(imgElements) && imgElements.length > 0) {
-      for (const img of imgElements) {
-        try {
-          const originalUrl = img.src;
-          // 跳过已经是 blob URL 的图片
-          if (originalUrl.startsWith('blob:')) continue;
-
-          // 下载图片并创建 blob URL
-          const response = await fetch(originalUrl);
-          const blob = await response.blob();
-          const blobUrl = URL.createObjectURL(blob);
-
-          // 替换 HTML 中的图片 URL
-          img.src = blobUrl;
-          blobUrls.push(blobUrl);
-
-          processedImages.push({
-            name: images?.find((image) => image.url === originalUrl)?.name || originalUrl.split('/').pop() || blobUrl,
-            url: blobUrl,
-            type: blob.type,
-            size: blob.size,
-          });
-
-          // 替换 markdown 中的图片 URL
-          // 使用正则表达式匹配 markdown 中的图片语法
-          const escapedUrl = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const imgRegex = new RegExp(`!\\[.*?\\]\\(${escapedUrl}\\)`, 'g');
-          processedMarkdownContent = processedMarkdownContent.replace(imgRegex, (match) => {
-            return match.replace(originalUrl, blobUrl);
-          });
-        } catch (error) {
-          console.error('处理图片时出错:', error);
-          // 继续处理下一张图片
-          setNotice(chrome.i18n.getMessage('errorProcessImage', [img.src]));
-          setErrors((prev) => [...prev, chrome.i18n.getMessage('errorProcessImage', [img.src])]);
-        }
-      }
-    }
-
-    if (cover) {
-      processedCoverImage = await processFile(cover);
-    }
-
-    processedHtmlContent = doc.documentElement.outerHTML;
-
-    return {
-      ...data,
-      data: {
-        ...data.data,
-        htmlContent: processedHtmlContent,
-        markdownContent: processedMarkdownContent,
-        images: processedImages,
-        cover: processedCoverImage || cover,
-      },
-    };
+  function addError(message: string) {
+    setErrors((prev) => [...prev, message])
   }
 
-  const processFile = async (file: FileData) => {
-    try {
-      const response = await fetch(file.url);
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      return {
-        ...file,
-        url: blobUrl,
-      };
-    } catch (error) {
-      console.error('处理文件时出错:', error);
-      setErrors((prev) => [...prev, chrome.i18n.getMessage('errorProcessFile', [file.name])]);
-      return file;
-    }
-  };
-
-  const processDynamic = async (data: SyncData) => {
-    setNotice(chrome.i18n.getMessage('processingContent'));
-    const { images = [], videos = [] } = data.data as DynamicData;
-
-    const processedImages: FileData[] = [];
-    const processedVideos: FileData[] = [];
-
-    // 确保 images 是可迭代的数组
-    if (Array.isArray(images) && images.length > 0) {
-      for (const image of images) {
-        setNotice(chrome.i18n.getMessage('errorProcessImage', [image.name]));
-        processedImages.push(await processFile(image));
-      }
-    } else {
-      console.warn('images 不是一个数组或可迭代对象', images);
-    }
-
-    // 确保 videos 是可迭代的数组
-    if (Array.isArray(videos) && videos.length > 0) {
-      for (const video of videos) {
-        setNotice(chrome.i18n.getMessage('errorProcessFile', [video.name]));
-        processedVideos.push(await processFile(video));
-      }
-    } else {
-      console.warn('videos 不是一个数组或可迭代对象', videos);
-    }
-
-    return {
-      ...data,
-      data: {
-        ...data.data,
-        images: processedImages,
-        videos: processedVideos,
-      },
-    };
-  };
-
-  const processPodcast = async (data: SyncData) => {
-    setNotice(chrome.i18n.getMessage('processingContent'));
-    const { audio } = data.data as PodcastData;
-
-    if (!audio) {
-      console.warn('音频数据不存在');
-      return data;
-    }
-
-    const processedAudio = await processFile(audio);
-    return {
-      ...data,
-      data: {
-        ...data.data,
-        audio: processedAudio,
-      },
-    };
-  };
-
-  const processVideo = async (data: SyncData) => {
-    setNotice(chrome.i18n.getMessage('processingContent'));
-    const { video } = data.data as VideoData;
-
-    if (!video) {
-      console.warn('视频数据不存在');
-      return data;
-    }
-
-    const processedVideo = await processFile(video);
-    return {
-      ...data,
-      data: {
-        ...data.data,
-        video: processedVideo,
-      },
-    };
-  };
-
-  const processYunPan = async (data: SyncData) => {
-    setNotice(chrome.i18n.getMessage('processingContent'));
-    const { files } = data.data as YunPanData;
-
-    const processedFiles: FileData[] = [];
-    // 确保 images 是可迭代的数组
-    if (Array.isArray(files) && files.length > 0) {
-      for (const file of files) {
-        setNotice(chrome.i18n.getMessage('errorProcessImage', [file.name]));
-        processedFiles.push(await processFile(file));
-      }
-    } else {
-      console.warn('images 不是一个数组或可迭代对象', files);
-    }
-    return {
-      ...data,
-      data: {
-        ...data.data,
-        files: processedFiles,
-      },
-    };
+  function clearAutoCloseTimers() {
+    if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current)
+    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current)
   }
 
-  const processShangPin = async (data: SyncData) => {
-    setNotice(chrome.i18n.getMessage('processingContent'));
-    const { files } = data.data as ShangPinData;
+  async function startAutoCloseTimer(delaySeconds = autoCloseDelay) {
+    clearAutoCloseTimers()
+    setCountdown(delaySeconds)
 
-    const processedFiles: FileData[] = [];
-    // 确保 images 是可迭代的数组
-    if (Array.isArray(files) && files.length > 0) {
-      for (const file of files) {
-        setNotice(chrome.i18n.getMessage('errorProcessImage', [file.name]));
-        processedFiles.push(await processFile(file));
-      }
-    } else {
-      console.warn('images 不是一个数组或可迭代对象', files);
-    }
-    return {
-      ...data,
-      data: {
-        ...data.data,
-        files: processedFiles,
-      },
-    };
-  }
-
-  const handleReloadTab = async (tabId: number) => {
-    try {
-      const tabInfo = publishedTabs.find((t) => t.tab.id === tabId);
-      if (!tabInfo) {
-        console.error('找不到要重新加载的标签页信息');
-        return;
-      }
-
-      // 更新标签页 URL
-      const updatedTab = await chrome.tabs.update(tabId, {
-        url: tabInfo.platformInfo.injectUrl,
-        active: true,
-      });
-
-      if (chrome.runtime.lastError) {
-        throw new Error(chrome.runtime.lastError.message);
-      }
-
-      // 注入脚本
-      await injectScriptsToTabs(
-        [
-          {
-            tab: updatedTab,
-            platformInfo: tabInfo.platformInfo,
-          },
-        ],
-        data,
-      );
-
-      // 更新本地状态
-      setPublishedTabs((prev) => prev.map((item) => (item.tab.id === tabId ? { ...item, tab: updatedTab } : item)));
-      publishedTabsRef.current = publishedTabsRef.current.map((t) => (t.tab.id === tabId ? { ...t, tab: updatedTab } : t));
-    } catch (error) {
-      console.error('重新加载标签页失败:', error);
-      setErrors((prev) => [...prev, chrome.i18n.getMessage('errorReloadTab', [error.message || '未知错误'])]);
-    }
-  };
-
-  const handleTabClick = (tabId: number) => {
-    chrome.tabs.update(tabId, { active: true });
-  };
-
-  const handleTabMiddleClick = (e: React.MouseEvent<HTMLButtonElement>, tabId: number) => {
-    if (e.button === 1 || e.buttons === 4) {
-      e.preventDefault();
-      handleCloseTab(tabId);
-    }
-  };
-
-  const handleCloseTab = async (tabId: number) => {
-    try {
-      await chrome.tabs.remove(tabId);
-      if (chrome.runtime.lastError) {
-        throw new Error(chrome.runtime.lastError.message);
-      }
-      setPublishedTabs((prev) => prev.filter((t) => t.tab.id !== tabId));
-      publishedTabsRef.current = publishedTabsRef.current.filter((t) => t.tab.id !== tabId);
-    } catch (error) {
-      console.error('关闭标签页失败:', error);
-      setErrors((prev) => [...prev, chrome.i18n.getMessage('errorCloseTab', [error.message || '未知错误'])]);
-    }
-  };
-
-  const handleCloseAllTabs = async () => {
-    try {
-      const tabIds = publishedTabsRef.current.map((tab) => tab.tab.id).filter((id): id is number => id !== undefined);
-      if (tabIds.length > 0) {
-        await chrome.tabs.remove(tabIds);
-      }
-      setPublishedTabs([]);
-      publishedTabsRef.current = [];
-    } catch (error) {
-      console.error('关闭所有标签页失败:', error);
-      setErrors((prev) => [...prev, chrome.i18n.getMessage('errorCloseAllTabs', [error.message || '未知错误'])]);
-    }
-  };
-
-  const handleCloseWindow = () => {
-    window.close();
-  };
-
-  const handleAutoCloseChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const checked = event.target.checked;
-    // 切换 autoClose 时清除之前的定时器
-    if (autoCloseTimerRef.current) {
-      clearTimeout(autoCloseTimerRef.current);
-    }
-    if (countdownTimerRef.current) {
-      clearInterval(countdownTimerRef.current);
-    }
-    setAutoClose(checked);
-    await storage.set(AUTO_CLOSE_KEY, String(checked));
-
-    if (checked) {
-      // 如果开启了自动关闭，立即启动新的定时器
-      console.log('用户开启自动关闭，启动定时器');
-      startAutoCloseTimer();
-    } else {
-      // 如果关闭了自动关闭，清除倒计时
-      console.log('用户关闭自动关闭，清除倒计时');
-      setCountdown(0);
-    }
-  };
-
-  const handleDelayChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const minutes = parseInt(event.target.value);
-    if (isNaN(minutes) || minutes < 1) return;
-
-    const seconds = minutes * 60;
-    setAutoCloseDelay(seconds);
-    await storage.set(AUTO_CLOSE_DELAY_KEY, String(seconds));
-
-    // 如果当前正在倒计时，重新启动定时器
-    if (autoClose && countdown > 0) {
-      console.log('用户修改延迟时间，重新启动定时器:', seconds, '秒');
-      if (autoCloseTimerRef.current) {
-        clearTimeout(autoCloseTimerRef.current);
-      }
-      if (countdownTimerRef.current) {
-        clearInterval(countdownTimerRef.current);
-      }
-      startAutoCloseTimer(seconds);
-    }
-  };
-
-  const startAutoCloseTimer = (delaySeconds?: number) => {
-    const delay = delaySeconds || autoCloseDelay;
-    console.log('startAutoCloseTimer 被调用，延迟时间:', delay, '秒');
-    // 清除之前的定时器
-    if (autoCloseTimerRef.current) {
-      clearTimeout(autoCloseTimerRef.current);
-    }
-    if (countdownTimerRef.current) {
-      clearInterval(countdownTimerRef.current);
-    }
-
-    // 设置倒计时
-    console.log('设置倒计时:', delay, '秒');
-    setCountdown(delay);
-
-    // 倒计时更新
     countdownTimerRef.current = window.setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
-          if (countdownTimerRef.current) {
-            clearInterval(countdownTimerRef.current);
-          }
-          return 0;
+          clearAutoCloseTimers()
+          void handleCloseWindow(true)
+          return 0
         }
-        return prev - 1;
-      });
-    }, 1000);
+        return prev - 1
+      })
+    }, 1000)
 
-    // 自动关闭定时器
-    autoCloseTimerRef.current = window.setTimeout(async () => {
-      if (sysnCloseTabsRef.current) {
-        await handleCloseAllTabs();
-      }
-      window.close();
-    }, delay * 1000);
-  };
+    autoCloseTimerRef.current = window.setTimeout(() => {
+      void handleCloseWindow(true)
+    }, delaySeconds * 1000)
+  }
 
-  const handleTabUpdated = (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
-    setPublishedTabs((prev) => prev.map((item) => (item.tab.id === tabId ? { ...item, tab } : item)));
-    publishedTabsRef.current = publishedTabsRef.current.map((t) => (t.tab.id === tabId ? { ...t, tab } : t));
-  };
+  async function processContentStrict(data: SyncData) {
+    let processed: SyncData = { ...data, origin: data.data }
 
-  const handleTabRemoved = (tabId: number) => {
-    setPublishedTabs((prev) => prev.filter((tab) => tab.tab.id !== tabId));
-    publishedTabsRef.current = publishedTabsRef.current.filter((t) => t.tab.id !== tabId);
-  };
+    if (data.platforms.some((platform) => platform.name.includes("ARTICLE"))) {
+      setNotice(t("publishPrefetchArticleAssets", "正在预取文章资源"))
+      processed = await processArticle(processed)
+    }
+    if (data.platforms.some((platform) => platform.name.includes("DYNAMIC"))) {
+      setNotice(t("publishPrefetchDynamicAssets", "正在预取图文资源"))
+      processed = await processDynamic(processed)
+    }
+    if (data.platforms.some((platform) => platform.name.includes("VIDEO"))) {
+      setNotice(t("publishPrefetchVideoAssets", "正在预取视频资源"))
+      processed = await processVideo(processed)
+    }
+    if (data.platforms.some((platform) => platform.name.includes("PODCAST"))) {
+      setNotice(t("publishPrefetchPodcastAssets", "正在预取播客资源"))
+      processed = await processPodcast(processed)
+    }
+    if (data.platforms.some((platform) => platform.name.includes("YUNPAN"))) {
+      setNotice(t("publishPrefetchCloudFiles", "正在预取云盘文件"))
+      processed = await processYunPan(processed)
+    }
+    if (data.platforms.some((platform) => platform.name.includes("SHANGPIN"))) {
+      setNotice(t("publishPrefetchProductFiles", "正在预取商品资源"))
+      processed = await processShangPin(processed)
+    }
 
-  const handleSyncCloseTabsChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const checked = event.target.checked;
-    setSyncCloseTabs(checked);
-    sysnCloseTabsRef.current = checked;
-    await storage.set(SYNC_CLOSE_TABS_KEY, String(checked));
-  };
+    return processed
+  }
 
-  // 组件卸载时清除定时器
+  async function handleReloadTab(tabId?: number) {
+    if (!tabId || !syncData) return
+
+    const tabInfo = publishedTabsRef.current.find((item) => item.tab.id === tabId)
+    if (!tabInfo) {
+      addError(t("publishReloadTabInfoMissing", "找不到要重载的标签页信息"))
+      return
+    }
+
+    try {
+      const updatedTab = await chrome.tabs.update(tabId, {
+        url: tabInfo.platformInfo.injectUrl,
+        active: true
+      })
+
+      await injectScriptsToTabs(
+        [{ tab: updatedTab, platformInfo: tabInfo.platformInfo }],
+        syncData,
+      )
+
+      setPublishedTabs((prev) =>
+        prev.map((item) => (item.tab.id === tabId ? { ...item, tab: updatedTab } : item)),
+      )
+      publishedTabsRef.current = publishedTabsRef.current.map((item) =>
+        item.tab.id === tabId ? { ...item, tab: updatedTab } : item,
+      )
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  function handleTabClick(tabId?: number) {
+    if (!tabId) return
+    void chrome.tabs.update(tabId, { active: true })
+  }
+
+  async function handleCloseTab(tabId?: number) {
+    if (!tabId) return
+
+    try {
+      await chrome.tabs.remove(tabId)
+      setPublishedTabs((prev) => prev.filter((item) => item.tab.id !== tabId))
+      publishedTabsRef.current = publishedTabsRef.current.filter((item) => item.tab.id !== tabId)
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  async function handleCloseAllTabs() {
+    const tabIds = publishedTabsRef.current.map((item) => item.tab.id).filter((id): id is number => typeof id === "number")
+    if (tabIds.length === 0) return
+    await chrome.tabs.remove(tabIds)
+    setPublishedTabs([])
+    publishedTabsRef.current = []
+  }
+
+  async function handleCloseWindow(shouldCloseTabs = false) {
+    if (shouldCloseTabs || syncCloseTabsRef.current) {
+      await handleCloseAllTabs()
+    }
+    window.close()
+  }
+
+  async function requestPublishNow(processedData: SyncData) {
+    setNotice(t("publishOpeningPlatformTabs", "正在打开平台标签页"))
+    await focusMainWindow()
+
+    const response = await chrome.runtime.sendMessage({
+      action: "MUTLIPOST_EXTENSION_PUBLISH_NOW",
+      data: processedData
+    })
+
+    if (response?.success === false) {
+      throw createPublishStartError(
+        response.error || "PUBLISH_START_FAILED",
+        response.errorCode || "PUBLISH_START_FAILED",
+      )
+    }
+
+    const tabs = (response?.tabs || []) as Array<{ tab: chrome.tabs.Tab; platformInfo: SyncDataPlatform }>
+    setPublishedTabs(tabs)
+    publishedTabsRef.current = tabs
+    setNotice(t("publishingInProgress", "正在发布..."))
+  }
+
   useEffect(() => {
-    return () => {
-      if (autoCloseTimerRef.current) {
-        clearTimeout(autoCloseTimerRef.current);
-      }
-      if (countdownTimerRef.current) {
-        clearInterval(countdownTimerRef.current);
-      }
-    };
-  }, []);
+    return () => clearAutoCloseTimers()
+  }, [])
 
-  // 初始化自动关闭设置并启动倒计时
   useEffect(() => {
     Promise.all([
       storage.get(AUTO_CLOSE_KEY),
       storage.get(AUTO_CLOSE_DELAY_KEY),
-      storage.get(SYNC_CLOSE_TABS_KEY),
-    ]).then(([autoCloseValue, delayValue, syncCloseTabsValue]) => {
-      const shouldAutoClose = autoCloseValue === undefined ? true : autoCloseValue === 'true';
-      const delaySeconds = delayValue === undefined ? DEFAULT_AUTO_CLOSE_DELAY : parseInt(delayValue);
-      const shouldSyncCloseTabs = syncCloseTabsValue === undefined ? false : syncCloseTabsValue === 'true';
+      storage.get(SYNC_CLOSE_TABS_KEY)
+    ]).then(([storedAutoClose, storedDelay, storedSyncCloseTabs]) => {
+      const nextAutoClose = storedAutoClose === undefined ? true : storedAutoClose === "true"
+      const nextDelay = storedDelay === undefined ? DEFAULT_AUTO_CLOSE_DELAY : parseInt(String(storedDelay), 10)
+      const nextSyncCloseTabs = storedSyncCloseTabs === undefined ? true : storedSyncCloseTabs === "true"
 
-      console.log(
-        '初始化 autoClose:',
-        shouldAutoClose,
-        '延迟时间:',
-        delaySeconds,
-        '秒',
-        'syncCloseTabs:',
-        shouldSyncCloseTabs,
-      );
-      setAutoClose(shouldAutoClose);
-      setAutoCloseDelay(delaySeconds);
-      setSyncCloseTabs(shouldSyncCloseTabs);
-      sysnCloseTabsRef.current = shouldSyncCloseTabs;
-
-      // 如果启用自动关闭，立即启动倒计时，传入从存储读取的延迟时间
-      if (shouldAutoClose) {
-        console.log('页面加载时启动自动关闭定时器，使用延迟时间:', delaySeconds, '秒');
-        startAutoCloseTimer(delaySeconds);
-      }
-    });
-  }, []);
-
-  // 发布完成后的处理逻辑
-  const handlePublishComplete = async (response: {
-    tabs?: Array<{ tab: chrome.tabs.Tab; platformInfo: SyncDataPlatform }>;
-  }) => {
-    setIsProcessing(false);
-    setNotice(chrome.i18n.getMessage('publishComplete'));
-
-    // 存储返回的 tabs 数据
-    if (response?.tabs) {
-      // 获取最新的 tab 信息
-      const updatedTabs = await Promise.all(
-        response.tabs.map(async (tabInfo) => {
-          try {
-            if (tabInfo.tab.id) {
-              const updatedTab = await chrome.tabs.get(tabInfo.tab.id);
-              return {
-                ...tabInfo,
-                tab: updatedTab,
-              };
-            }
-            return tabInfo;
-          } catch (error) {
-            console.error('获取标签页信息失败:', error);
-            return tabInfo;
-          }
-        }),
-      );
-      setPublishedTabs(updatedTabs);
-      publishedTabsRef.current = updatedTabs;
-    }
-
-    // 发布完成，倒计时已经在页面加载时启动
-    console.log('发布完成');
-  };
+      setAutoClose(nextAutoClose)
+      setAutoCloseDelay(Number.isFinite(nextDelay) ? nextDelay : DEFAULT_AUTO_CLOSE_DELAY)
+      setSyncCloseTabs(nextSyncCloseTabs)
+      syncCloseTabsRef.current = nextSyncCloseTabs
+    })
+  }, [])
 
   useEffect(() => {
-    chrome.tabs.onUpdated.addListener(handleTabUpdated);
-    chrome.tabs.onRemoved.addListener(handleTabRemoved);
-    chrome.runtime.sendMessage({ action: 'MUTLIPOST_EXTENSION_PUBLISH_REQUEST_SYNC_DATA' }, async (response) => {
-      console.log(response);
-      const data = response.syncData as SyncData;
-      if (!data) return setNotice(chrome.i18n.getMessage('errorGetSyncData'));
-      setTitle(getTitleFromData(data));
+    const handleTabUpdated = (tabId: number, _changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
+      setPublishedTabs((prev) => prev.map((item) => (item.tab.id === tabId ? { ...item, tab } : item)))
+      publishedTabsRef.current = publishedTabsRef.current.map((item) =>
+        item.tab.id === tabId ? { ...item, tab } : item,
+      )
+    }
 
-      let processedData = data;
-      processedData.origin = data.data;
+    const handleTabRemoved = (tabId: number) => {
+      setPublishedTabs((prev) => prev.filter((item) => item.tab.id !== tabId))
+      publishedTabsRef.current = publishedTabsRef.current.filter((item) => item.tab.id !== tabId)
+    }
+
+    const handleRuntimeMessage = (message: { action?: string; data?: unknown }) => {
+      if (message.action === "MUTLIPOST_EXTENSION_PUBLISH_PROGRESS") {
+        const nextProgress = message.data as PublishProgressPayload
+        setProgress(nextProgress)
+        setNotice(
+          nextProgress.failureCount > 0
+            ? t("publishExecutionInProgressFailed", "执行中，已有 $1 个失败", nextProgress.failureCount)
+            : t(
+                "publishExecutionInProgressSucceeded",
+                "执行中，已成功 $1 / $2",
+                [nextProgress.successCount, nextProgress.totalPlatforms],
+              ),
+        )
+      }
+
+      if (message.action === "MUTLIPOST_EXTENSION_PUBLISH_COMPLETE") {
+        const publishResult = message.data as PublishExecutionResult
+        setResult(publishResult)
+        setIsProcessing(false)
+        setNotice(
+          publishResult.status === "COMPLETED"
+            ? t("publishExecutionCompleted", "执行完成")
+            : t("publishExecutionFailed", "执行失败"),
+        )
+
+        if (publishResult.status === "FAILED") {
+          clearAutoCloseTimers()
+          setCountdown(0)
+          if (publishResult.errorMessage) addError(publishResult.errorMessage)
+        } else if (autoClose) {
+          void startAutoCloseTimer()
+        }
+      }
+    }
+
+    chrome.tabs.onUpdated.addListener(handleTabUpdated)
+    chrome.tabs.onRemoved.addListener(handleTabRemoved)
+    chrome.runtime.onMessage.addListener(handleRuntimeMessage)
+
+    chrome.runtime.sendMessage({ action: "MUTLIPOST_EXTENSION_PUBLISH_REQUEST_SYNC_DATA" }, async (response) => {
+      const data = response?.syncData as SyncData | undefined
+      if (!data) {
+        setNotice(t("publishReadTaskFailed", "无法读取发布任务"))
+        setIsProcessing(false)
+        return
+      }
+
+      setSyncData(data)
+      setTitle(getTitleFromData(data))
 
       try {
-        if (data?.platforms.some((platform) => platform.name.includes('ARTICLE'))) {
-          processedData = await processArticle(data);
-        }
-
-        if (data?.platforms.some((platform) => platform.name.includes('DYNAMIC'))) {
-          processedData = await processDynamic(data);
-        }
-
-        if (data?.platforms.some((platform) => platform.name.includes('VIDEO'))) {
-          processedData = await processVideo(data);
-        }
-
-        if (data?.platforms.some((platform) => platform.name.includes('PODCAST'))) {
-          processedData = await processPodcast(data);
-        }
-
-        if (data?.platforms.some((platform) => platform.name.includes('YUNPAN'))) {
-          processedData = await processYunPan(data);
-        }
-
-        if (data?.platforms.some((platform) => platform.name.includes('SHANGPIN'))) {
-          processedData = await processShangPin(data);
-        }
-
-        setData(processedData);
-        setNotice(chrome.i18n.getMessage('processingComplete'));
-
-        console.log(processedData);
-
-        setTimeout(async () => {
-          await focusMainWindow();
-          chrome.runtime.sendMessage(
-            { action: 'MUTLIPOST_EXTENSION_PUBLISH_NOW', data: processedData },
-            handlePublishComplete,
-          );
-        }, 1000 * 1);
+        const processed = await processContentStrict(data)
+        setSyncData(processed)
+        await requestPublishNow(processed)
       } catch (error) {
-        console.error('处理内容时出错:', error);
-        setNotice(chrome.i18n.getMessage('errorProcessContent'));
-        setIsProcessing(false);
+        const message = error instanceof Error ? error.message : String(error)
+        addError(message)
+        setNotice(
+          error instanceof Error && error.name === "SCRIPT_INJECTION_FAILED"
+            ? t("publishErrorScriptInjectionFailed", "脚本注入失败")
+            : t("publishAssetPreflightFailed", "资源预处理失败"),
+        )
+        setIsProcessing(false)
+        await chrome.runtime.sendMessage({
+          action: "MUTLIPOST_EXTENSION_PUBLISH_ABORT",
+          data: {
+            errorCode:
+              error instanceof Error && error.name === "SCRIPT_INJECTION_FAILED"
+                ? "SCRIPT_INJECTION_FAILED"
+                : "ASSET_PREFLIGHT_FAILED",
+            errorMessage: message
+          }
+        })
       }
-    });
+    })
 
     return () => {
-      chrome.tabs.onUpdated.removeListener(handleTabUpdated);
-      chrome.tabs.onRemoved.removeListener(handleTabRemoved);
-    };
-  }, []);
+      chrome.tabs.onUpdated.removeListener(handleTabUpdated)
+      chrome.tabs.onRemoved.removeListener(handleTabRemoved)
+      chrome.runtime.onMessage.removeListener(handleRuntimeMessage)
+    }
+  }, [autoClose])
+
+  const progressValue = result
+    ? 100
+    : progress && progress.totalPlatforms > 0
+      ? Math.round(((progress.successCount + progress.failureCount) / progress.totalPlatforms) * 100)
+      : undefined
 
   return (
     <HeroUIProvider>
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <div className="w-full max-w-md space-y-4">
-          <h2 className="text-xl font-semibold text-center text-foreground">{chrome.i18n.getMessage('publishing')}</h2>
-          {title && <p className="text-sm text-center truncate text-muted-foreground">{title}</p>}
-          <Progress
-            value={isProcessing ? undefined : 100}
-            isIndeterminate={isProcessing}
-            aria-label={notice || chrome.i18n.getMessage('publishingInProgress')}
-            className={`w-full ${isProcessing ? 'bg-green-500' : ''}`}
-            size="sm"
-          />
-          {notice && <p className="text-sm text-center text-muted-foreground">{notice}</p>}
+          <h2 className="text-center text-xl font-semibold text-foreground">{t("publishing", "正在发布内容")}</h2>
+          {title && <p className="truncate text-center text-sm text-muted-foreground">{title}</p>}
 
-          {/* 调试信息 */}
-          {/* <div className="text-xs text-center text-gray-400">
-            Debug: isProcessing={isProcessing.toString()}, autoClose={autoClose.toString()}, countdown={countdown}
-          </div> */}
+          <Progress
+            value={progressValue}
+            isIndeterminate={isProcessing && progressValue === undefined}
+            aria-label={notice}
+            size="sm"
+            className="w-full"
+          />
+          <p className="text-center text-sm text-muted-foreground">{notice}</p>
 
           {errors.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-sm text-center text-muted-foreground">{chrome.i18n.getMessage('errorMessages')}</p>
-              <ul className="space-y-2">
-                {errors.map((error, index) => (
-                  <li key={index}>{error}</li>
-                ))}
-              </ul>
+            <div className="space-y-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {errors.map((error, index) => (
+                <p key={`${error}-${index}`}>{error}</p>
+              ))}
             </div>
           )}
-          <div className="space-y-2">
-            {publishedTabs.length > 0 &&
-              publishedTabs.map((tab) => {
-                return (
-                  <div
-                    key={tab.tab.id}
-                    className="mb-6">
-                    <ul className="space-y-2">
-                      <li
-                        key={tab.tab.id}
-                        className="relative flex items-center">
-                        <Button
-                          isIconOnly
-                          size="sm"
-                          variant="light"
-                          className="mr-2"
-                          onPress={() => handleReloadTab(tab.tab.id)}
-                          aria-label={chrome.i18n.getMessage('sidepanelReloadTab')}>
-                          <RefreshCw className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          className="justify-start pl-2 pr-10 text-left grow"
-                          onPress={() => handleTabClick(tab.tab.id)}
-                          onMouseDown={(e) => handleTabMiddleClick(e, tab.tab.id)}>
-                          {tab.tab.favIconUrl && (
-                            <img
-                              src={tab.tab.favIconUrl}
-                              alt=""
-                              className="w-4 h-4 mr-2 shrink-0"
-                              onError={(e) => (e.currentTarget.style.display = 'none')}
-                            />
-                          )}
-                          <span className="truncate">{tab.tab.title || tab.tab.url}</span>
-                        </Button>
-                        <Button
-                          isIconOnly
-                          size="sm"
-                          color="danger"
-                          variant="light"
-                          className="absolute -translate-y-1/2 right-2 top-1/2"
-                          onPress={() => handleCloseTab(tab.tab.id)}
-                          aria-label={chrome.i18n.getMessage('sidepanelCloseTab')}>
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </li>
-                    </ul>
+
+          {platformResults.length > 0 && (
+            <div className="space-y-2">
+              {platformResults.map((item) => (
+                <div key={`${item.platformName}-${item.tabId || "na"}`} className="rounded border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-sm font-medium">{formatPlatformName(item.platformName)}</span>
+                    <span className="text-xs text-muted-foreground">{formatStatusLabel(item.status)}</span>
                   </div>
-                );
-              })}
-          </div>
-          {/* 自动关闭设置和倒计时 */}
-          <div className="px-3 py-2 space-y-3 rounded-lg bg-gray-50">
+                  {formatErrorMessage(item) && (
+                    <p className="mt-1 text-xs text-red-600">{formatErrorMessage(item)}</p>
+                  )}
+                  {item.publishUrl && <p className="mt-1 truncate text-xs text-muted-foreground">{item.publishUrl}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {publishedTabs.length > 0 && (
+            <div className="space-y-2">
+              {publishedTabs.map((item) => (
+                <div key={item.tab.id} className="relative flex items-center rounded border p-2">
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant="light"
+                    className="mr-2"
+                    onPress={() => handleReloadTab(item.tab.id)}
+                    aria-label={t("sidepanelReloadTab", "重新加载标签页")}>
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    className="grow justify-start pl-2 pr-10 text-left"
+                    onPress={() => handleTabClick(item.tab.id)}>
+                    <span className="truncate">{item.tab.title || item.tab.url || item.platformInfo.name}</span>
+                  </Button>
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    color="danger"
+                    variant="light"
+                    className="absolute right-2 top-1/2 -translate-y-1/2"
+                    onPress={() => handleCloseTab(item.tab.id)}
+                    aria-label={t("sidepanelCloseTab", "关闭标签页")}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="rounded-lg bg-gray-50 px-3 py-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Tooltip
-                  content="You can set a suitable delay for different social media platforms when automating"
+                  content={t("publishAutoCloseTooltip", "仅在发布成功后才会自动关闭。")}
                   placement="top"
                   className="max-w-xs">
                   <Switch
                     isSelected={autoClose}
-                    onChange={handleAutoCloseChange}
-                    size="sm"
-                    className="data-[state=checked]:bg-primary-600 cursor-help">
-                    <span className="text-sm text-gray-700">{chrome.i18n.getMessage('publishAutoClose')}</span>
+                    onChange={async (event) => {
+                      const checked = event.target.checked
+                      setAutoClose(checked)
+                      await storage.set(AUTO_CLOSE_KEY, String(checked))
+                      if (!checked) {
+                        clearAutoCloseTimers()
+                        setCountdown(0)
+                      } else if (result?.status === "COMPLETED") {
+                        void startAutoCloseTimer()
+                      }
+                    }}
+                    size="sm">
+                    <span className="text-sm text-gray-700">{t("publishAutoClose", "自动关闭")}</span>
                   </Switch>
                 </Tooltip>
+
                 {autoClose && (
-                  <div className="flex items-center gap-1 ml-2">
+                  <div className="ml-2 flex items-center gap-1">
                     <NumberInput
                       hideStepper
                       size="sm"
                       variant="underlined"
-                      min="1"
-                      max="30"
-                      // defaultValue={Math.floor(autoCloseDelay / 60)}
-                      value={Math.floor(autoCloseDelay / 60)}
-                      onChange={(e) => handleDelayChange(e)}
-                      className="w-14"
+                      min={5}
+                      max={300}
+                      value={autoCloseDelay}
+                      onChange={async (value) => {
+                        const next = typeof value === "number" ? value : parseInt(String(value), 10)
+                        if (!Number.isFinite(next) || next < 5) return
+                        setAutoCloseDelay(next)
+                        await storage.set(AUTO_CLOSE_DELAY_KEY, String(next))
+                        if (autoClose && result?.status === "COMPLETED") {
+                          void startAutoCloseTimer(next)
+                        }
+                      }}
+                      className="w-16"
                     />
-                    <span className="text-xs text-gray-500">min</span>
+                    <span className="text-xs text-gray-500">{t("publishSecondsUnit", "秒")}</span>
                   </div>
                 )}
               </div>
+
               {autoClose && countdown > 0 && (
-                <div className="flex gap-1.5 items-center">
-                  <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse" />
-                  <span className="text-xs font-medium text-orange-700">
-                    {chrome.i18n.getMessage('publishAutoCloseCountdown', [countdown.toString()])}
-                  </span>
-                </div>
+                <span className="text-xs font-medium text-orange-700">
+                  {t("publishAutoCloseCountdown", "$1 秒后自动关闭", countdown)}
+                </span>
               )}
             </div>
 
-            {/* 同步关闭标签页设置 - 只在启用自动关闭时显示 */}
             {autoClose && (
-              <div className="flex items-center">
+              <div className="mt-2 flex items-center">
                 <Tooltip
-                  content="When enabled, closing the publish window will also close all opened platform tabs"
+                  content={t("publishCloseTabsTogetherTooltip", "关闭当前窗口时，一并关闭已打开的平台标签页。")}
                   placement="top"
                   className="max-w-xs">
                   <Switch
                     isSelected={syncCloseTabs}
-                    onChange={handleSyncCloseTabsChange}
-                    size="sm"
-                    className="data-[state=checked]:bg-primary-600 cursor-help">
-                    <span className="text-sm text-gray-700">同步关闭标签页</span>
+                    onChange={async (event) => {
+                      const checked = event.target.checked
+                      setSyncCloseTabs(checked)
+                      syncCloseTabsRef.current = checked
+                      await storage.set(SYNC_CLOSE_TABS_KEY, String(checked))
+                    }}
+                    size="sm">
+                    <span className="text-sm text-gray-700">{t("publishCloseTabsTogether", "同时关闭标签页")}</span>
                   </Switch>
                 </Tooltip>
               </div>
@@ -750,45 +705,17 @@ export default function Publish() {
           </div>
 
           {!isProcessing && (
-            <div className="flex justify-center gap-2 mt-4">
-              <Button
-                color="primary"
-                variant="solid"
-                onPress={handleCloseWindow}
-                className="flex-1">
-                {chrome.i18n.getMessage('finishPublishing')}
+            <div className="flex gap-2">
+              <Button color="primary" className="flex-1" onPress={() => void handleCloseWindow(false)}>
+                {t("finishPublishing", "完成发布")}
               </Button>
-              <Button
-                color="danger"
-                variant="solid"
-                onPress={async () => {
-                  await handleCloseAllTabs();
-                  handleCloseWindow();
-                }}
-                className="flex-1">
-                {chrome.i18n.getMessage('finishAndCloseTabs')}
+              <Button color="danger" className="flex-1" onPress={() => void handleCloseWindow(true)}>
+                {t("finishAndCloseTabs", "完成并关闭所有标签页")}
               </Button>
             </div>
           )}
         </div>
-
-        {/* Contact us footer tip */}
-        <div className="mt-8 text-center">
-          <p className="text-xs text-gray-500">
-            {chrome.i18n.getMessage('contactUsIfProblem')}
-            <a
-              href="https://docs.multipost.app/docs/user-guide/contact-us"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-500 underline hover:text-blue-600">
-              Contact Us
-            </a>
-          </p>
-        </div>
       </div>
     </HeroUIProvider>
-  );
+  )
 }
-
-
-

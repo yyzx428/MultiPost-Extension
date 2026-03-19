@@ -32,6 +32,7 @@ function newContext() {
   const distRoot = path.resolve(__dirname, "..")
   const chromeAny: any = createChromeMock()
   ;(globalThis as any).chrome = chromeAny
+  delete (globalThis as any).__TEST_API_SERVICE_MOCK__
   return { distRoot, chromeAny }
 }
 
@@ -49,6 +50,7 @@ export const tests: TestCase[] = [
 
       // trust-domain handler awaits storage.get() before opening the popup.
       await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 0))
 
       assert.equal(chromeAny.__records.windowsCreated.length, 1)
       assert.ok(String(chromeAny.__records.windowsCreated[0].url).includes("tabs/trust-domain.html#"))
@@ -122,7 +124,7 @@ export const tests: TestCase[] = [
       })
 
       const res = await pending
-      assert.equal(res.traceId, "t1")
+      assert.equal(res.status, "FAILED")
       assert.equal(res.totalPlatforms, 2)
       assert.equal(res.successCount, 1)
       assert.equal(res.failureCount, 1)
@@ -169,6 +171,132 @@ export const tests: TestCase[] = [
       assert.equal(sent.message.action, "MUTLIPOST_EXTENSION_EXECUTE_FILE_OPS")
       assert.equal(sent.message.traceId, "x")
       assert.equal(sent.message.code, 0)
+    }
+  },
+  {
+    name: "chain action completion persists task result",
+    fn: async () => {
+      const { distRoot, chromeAny } = newContext()
+      const persistedPayloads: any[] = []
+      ;(globalThis as any).__TEST_API_SERVICE_MOCK__ = {
+        getExtensionLinkState: async () => ({
+          apiKey: "token",
+          extensionClientId: "client-1",
+          isLinked: true
+        }),
+        reportTaskResult: async (payload: any) => {
+          persistedPayloads.push(payload)
+          return { ok: true }
+        }
+      }
+
+      await loadBackgroundIndex(distRoot)
+
+      const pending = chromeAny.runtime.__dispatchMessage(
+        {
+          action: "MUTLIPOST_EXTENSION_CHAIN_ACTION",
+          traceId: "chain-1",
+          data: { action: "baidu-agiso", config: { foo: "bar" }, taskId: "task-1" }
+        },
+        { tab: { id: 10, windowId: 20 } }
+      )
+
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      assert.equal(chromeAny.__records.windowsCreated.length, 1)
+      assert.ok(String(chromeAny.__records.windowsCreated[0].url).includes("tabs/chain-action.html"))
+
+      const completionAck = await chromeAny.runtime.__dispatchMessage({
+        action: "MUTLIPOST_EXTENSION_CHAIN_ACTION_COMPLETE",
+        data: {
+          kind: "chain-action",
+          status: "FAILED",
+          totalPlatforms: 2,
+          successCount: 0,
+          failureCount: 2,
+          results: [],
+          stages: [
+            {
+              stageName: "baiduShare",
+              status: "FAILED",
+              startedAt: "2026-03-18T00:00:00.000Z",
+              finishedAt: "2026-03-18T00:00:01.000Z",
+              errorCode: "BAIDUYUN_SHARE_RESULT_INVALID",
+              errorMessage: "BAIDUYUN_SHARE_RESULT_INVALID"
+            },
+            {
+              stageName: "agisoPublish",
+              status: "FAILED",
+              startedAt: "2026-03-18T00:00:01.000Z",
+              finishedAt: "2026-03-18T00:00:02.000Z",
+              errorMessage: "agisoPublish stage not started"
+            }
+          ],
+          errorCode: "BAIDUYUN_SHARE_RESULT_INVALID",
+          errorMessage: "BAIDUYUN_SHARE_RESULT_INVALID"
+        }
+      })
+
+      assert.equal(completionAck.success, true)
+      assert.equal(completionAck.data.status, "FAILED")
+      assert.equal(persistedPayloads.length, 1)
+      assert.equal(persistedPayloads[0].taskId, "task-1")
+      assert.equal(persistedPayloads[0].extensionClientId, "client-1")
+
+      const res = await pending
+      assert.equal(res.status, "FAILED")
+      assert.equal(res.errorCode, "BAIDUYUN_SHARE_RESULT_INVALID")
+    }
+  },
+  {
+    name: "chain action persist failure surfaces task result persist error",
+    fn: async () => {
+      const { distRoot, chromeAny } = newContext()
+      ;(globalThis as any).__TEST_API_SERVICE_MOCK__ = {
+        getExtensionLinkState: async () => ({
+          apiKey: "token",
+          extensionClientId: "client-1",
+          isLinked: true
+        }),
+        reportTaskResult: async () => {
+          throw new Error("TASK_RESULT_PERSIST_FAILED:500")
+        }
+      }
+
+      await loadBackgroundIndex(distRoot)
+
+      const pending = chromeAny.runtime.__dispatchMessage({
+        action: "MUTLIPOST_EXTENSION_CHAIN_ACTION",
+        traceId: "chain-2",
+        data: { action: "baidu-agiso", config: {}, taskId: "task-2" }
+      })
+
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const completionAck = await chromeAny.runtime.__dispatchMessage({
+        action: "MUTLIPOST_EXTENSION_CHAIN_ACTION_COMPLETE",
+        data: {
+          kind: "chain-action",
+          status: "FAILED",
+          totalPlatforms: 2,
+          successCount: 0,
+          failureCount: 2,
+          results: [],
+          stages: [],
+          errorCode: "BAIDUYUN_SHARE_RESULT_INVALID",
+          errorMessage: "BAIDUYUN_SHARE_RESULT_INVALID"
+        }
+      })
+
+      assert.equal(completionAck.success, true)
+      assert.equal(completionAck.data.errorCode, "TASK_RESULT_PERSIST_FAILED")
+      assert.equal(completionAck.data.errorMessage, "TASK_RESULT_PERSIST_FAILED:500")
+
+      const res = await pending
+      assert.equal(res.status, "FAILED")
+      assert.equal(res.errorCode, "TASK_RESULT_PERSIST_FAILED")
     }
   },
   {

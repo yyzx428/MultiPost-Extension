@@ -106,7 +106,7 @@ const Options = () => {
           });
 
           // Activate tabs sequentially with delay
-          for (const [tab] of tabs) {
+          for (const { tab } of tabs) {
             if (tab.id) {
               await chrome.tabs.update(tab.id, { active: true });
               await new Promise((resolve) => setTimeout(resolve, 2000));

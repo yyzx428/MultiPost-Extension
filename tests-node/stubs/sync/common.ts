@@ -2,6 +2,13 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 export type SyncDataPlatform = any
 export type SyncData = any
+export type FileData = {
+  name: string
+  url: string
+  type?: string
+  size?: number
+  contentDataUrl?: string
+}
 
 export async function getPlatformInfos() {
   return []

@@ -1,5 +1,5 @@
-import { waitForElement } from './common';
-import { createdInputs } from '~contents/helper';
+import { waitForElement } from "./common"
+import { createdInputs } from "./input-tracker"
 
 let isProcessingImage = false;
 

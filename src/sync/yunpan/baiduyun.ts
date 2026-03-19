@@ -1,127 +1,325 @@
-import type { SyncData, YunPanData } from "~sync/common";
+import type { SyncData, YunPanData } from "~sync/common"
 
-export async function BaiduYunPan(data: SyncData) {
+type PublishResult = {
+  success: boolean
+  publishUrl?: string
+  errorCode?: string
+  errorMessage?: string
+}
 
-    const { paths, files } = data.data as YunPanData;
+export async function BaiduYunPan(data: SyncData): Promise<PublishResult> {
+  const { paths, files } = data.data as YunPanData
 
-    // 辅助函数：等待元素出现
-    function waitForElement(selector: string, timeout = 10000): Promise<Element> {
-        return new Promise((resolve, reject) => {
-            const element = document.querySelector(selector);
-            if (element) {
-                resolve(element);
-                return;
-            }
+  const createPublishError = (code: string, message: string) => {
+    const error = new Error(message)
+    error.name = code
+    return error
+  }
 
-            const observer = new MutationObserver(() => {
-                const element = document.querySelector(selector);
-                if (element) {
-                    resolve(element);
-                    observer.disconnect();
-                }
-            });
+  const sendResult = (
+    success: boolean,
+    publishUrl?: string,
+    errorMessage?: string,
+    errorCode?: string,
+  ) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const win = window as any
+    if (typeof win.multipostSendResult === "function") {
+      win.multipostSendResult(success, publishUrl, errorMessage, errorCode)
+    }
+  }
 
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true,
-            });
+  const waitForAnyElement = async (selectors: string[], timeout = 10000) =>
+    new Promise<Element>((resolve, reject) => {
+      const find = () => {
+        for (const selector of selectors) {
+          const element = document.querySelector(selector)
+          if (element) return element
+        }
 
-            setTimeout(() => {
-                observer.disconnect();
-                reject(new Error(`Element with selector "${selector}" not found within ${timeout}ms`));
-            }, timeout);
-        });
+        return null
+      }
+
+      const current = find()
+      if (current) {
+        resolve(current)
+        return
+      }
+
+      const observer = new MutationObserver(() => {
+        const next = find()
+        if (next) {
+          observer.disconnect()
+          resolve(next)
+        }
+      })
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      })
+
+      setTimeout(() => {
+        observer.disconnect()
+        reject(
+          createPublishError(
+            "SCRIPT_INJECTION_FAILED",
+            `Element not found: ${selectors.join(" | ")}`,
+          ),
+        )
+      }, timeout)
+    })
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+  const findButtonByText = (text: string) =>
+    Array.from(document.querySelectorAll("button")).find((element) =>
+      (element.textContent || "").includes(text),
+    ) as HTMLButtonElement | undefined
+
+  const clickElement = (element: Element | null | undefined) => {
+    if (!element) return
+
+    const target = (element.closest("button, a, [role='button']") || element) as HTMLElement
+    target.click()
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))
+  }
+
+  const getCurrentPathSegments = () => {
+    const hash = window.location.hash || ""
+    const match = hash.match(/(?:\?|&)path=([^&]+)/)
+    if (!match?.[1]) return [] as string[]
+
+    try {
+      return decodeURIComponent(match[1]).split("/").filter(Boolean)
+    } catch {
+      return []
+    }
+  }
+
+  const getRemainingPaths = () => {
+    const currentSegments = getCurrentPathSegments()
+    let prefixLength = 0
+
+    while (prefixLength < currentSegments.length && prefixLength < paths.length) {
+      if (currentSegments[prefixLength] !== paths[prefixLength]) break
+      prefixLength += 1
     }
 
-    // 辅助函数：上传文件
-    async function uploadImages() {
-        const fileInput = (await waitForElement('input[title="点击选择文件"]')) as HTMLInputElement;
-        if (!fileInput) {
-            console.error('未找到文件输入元素');
-            return;
-        }
+    return paths.slice(prefixLength)
+  }
 
-        const dataTransfer = new DataTransfer();
+  const waitForPageReady = async () => {
+    await waitForAnyElement(
+      [
+        'button[title="新建文件夹"]',
+        'input[title="点击选择文件"]',
+        'input[placeholder="搜索我的文件"]',
+        ".wp-s-main__empty-title",
+        ".wp-s-agile-tool-bar__item"
+      ],
+      15000,
+    )
+  }
 
-        for (const fileInfo of files) {
-            try {
-                const response = await fetch(fileInfo.url);
-                if (!response.ok) {
-                    throw new Error(`HTTP 错误! 状态: ${response.status}`);
-                }
-                const blob = await response.blob();
-                const file = new File([blob], fileInfo.name, { type: fileInfo.type });
-                dataTransfer.items.add(file);
-            } catch (error) {
-                console.error(`上传图片 ${fileInfo.url} 失败:`, error);
-            }
-        }
+  const dismissBlockingDialogs = () => {
+    const bodyText = document.body?.innerText || ""
+    if (!bodyText.includes("下载百度网盘客户端")) return
 
-        if (dataTransfer.files.length > 0) {
-            fileInput.files = dataTransfer.files;
-            fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-            await new Promise((resolve) => setTimeout(resolve, 2000)); // 等待文件处理
-            console.log('文件上传操作完成');
-        } else {
-            console.error('没有成功添加任何文件');
-        }
+    const rejectButton = findButtonByText("暂时不了")
+    if (rejectButton) {
+      clickElement(rejectButton)
+      return
     }
 
-    if (files && files.length > 0) {
-        // 等待页面加载
-        await waitForElement('td[class="wp-s-pan-table__td"]');
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+    const closeButton = Array.from(document.querySelectorAll("i, button")).find((element) => {
+      const htmlElement = element as HTMLElement
+      return (
+        htmlElement.className.includes("u-dialog__close") ||
+        htmlElement.className.includes("u-icon-close")
+      )
+    })
 
-        for (const path of paths) {
-            await waitForElement('td[class="wp-s-pan-table__td"]');
-            let dir = document.querySelector('a[title="' + path + '"]') as HTMLElement;
-            if (!dir) {
-                const newDirButton = document.querySelector('button[title="新建文件夹"]') as HTMLElement;
-                if (!newDirButton) {
-                    console.error('未找到新建文件夹按钮');
-                    return;
-                }
+    clickElement(closeButton)
+  }
 
-                newDirButton.click();
+  const findDirectory = (name: string) => {
+    const byTitle = document.querySelector(`a[title="${name}"]`)
+    if (byTitle) return byTitle as HTMLElement
 
-                await waitForElement('td[class="wp-s-pan-table__td"]');
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-                const dirNameInputs = document.querySelectorAll('input[class="u-input__inner"]');
-                const dirNameInput = Array.from(dirNameInputs).find(
-                    (element: HTMLInputElement) => !element.placeholder?.includes('搜索我的文件'),
-                ) as HTMLInputElement
-                if (!dirNameInput) {
-                    console.error('未找到文件名输入框');
-                    return;
-                }
+    const candidates = Array.from(
+      document.querySelectorAll(
+        "a, span, div, td, tr, li, button",
+      ),
+    ).filter((element) => (element.textContent || "").trim() === name)
 
-                dirNameInput.value = path;
-                dirNameInput.dispatchEvent(new Event('input', { bubbles: true }));
-
-                const confirDirButton = document.querySelector('i[class="iconfont icon-check"]') as HTMLElement;
-                if (!confirDirButton) {
-                    console.error('未找到文件名确认按钮');
-                    return;
-                }
-
-                confirDirButton.click();
-                confirDirButton.dispatchEvent(new Event('click', { bubbles: true }));
-                await new Promise((resolve) => setTimeout(resolve, 5000));
-                dir = document.querySelector('a[title="' + path + '"]') as HTMLElement;
-            }
-
-            if (!dir) {
-                console.error('未找到' + path + '文件夹');
-                return;
-            }
-            dir.click();
-            dir.dispatchEvent(new Event('click', { bubbles: true }));
-            await new Promise((resolve) => setTimeout(resolve, 3000));
-        }
-
-        await uploadImages();
-        await new Promise((resolve) => setTimeout(resolve, 10000));
-
-        console.log("完成百度云文件上传");
+    for (const candidate of candidates) {
+      const clickable = candidate.closest("a, button, [role='button'], tr, li")
+      if (clickable) return clickable as HTMLElement
+      if (candidate instanceof HTMLElement) return candidate
     }
+
+    return null
+  }
+
+  const setInputValue = (input: HTMLInputElement, value: string) => {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")
+    descriptor?.set?.call(input, value)
+    input.dispatchEvent(new Event("input", { bubbles: true }))
+    input.dispatchEvent(new Event("change", { bubbles: true }))
+  }
+
+  const confirmWithEnter = (input: HTMLInputElement) => {
+    const keyboardEventInit: KeyboardEventInit = {
+      bubbles: true,
+      cancelable: true,
+      key: "Enter",
+      code: "Enter",
+      keyCode: 13,
+      which: 13
+    }
+
+    input.dispatchEvent(new KeyboardEvent("keydown", keyboardEventInit))
+    input.dispatchEvent(new KeyboardEvent("keypress", keyboardEventInit))
+    input.dispatchEvent(new KeyboardEvent("keyup", keyboardEventInit))
+   }
+
+  const createFolder = async (name: string) => {
+    const createButton =
+      (document.querySelector('button[title="新建文件夹"]') as HTMLElement | null) ||
+      findButtonByText("新建文件夹")
+
+    if (!createButton) {
+      throw createPublishError("SCRIPT_INJECTION_FAILED", "Unable to find Baidu Yun create folder button")
+    }
+
+    clickElement(createButton)
+    await sleep(800)
+
+    const folderInput = Array.from(document.querySelectorAll("input.u-input__inner")).find((element) => {
+      const input = element as HTMLInputElement
+      return input.placeholder !== "搜索我的文件"
+    }) as HTMLInputElement | undefined
+
+    if (!folderInput) {
+      throw createPublishError("SCRIPT_INJECTION_FAILED", "Unable to find Baidu Yun folder input")
+    }
+
+    folderInput.focus()
+    setInputValue(folderInput, name)
+    confirmWithEnter(folderInput)
+    await sleep(2000)
+
+    if (findDirectory(name)) {
+      return
+    }
+
+    const confirmIcon = (folderInput.closest("tr, li, div")?.querySelector(
+      "i.iconfont.icon-check, i.u-icon-check",
+    ) ||
+      document.querySelector("i.iconfont.icon-check, i.u-icon-check")) as HTMLElement | null
+
+    if (!confirmIcon) {
+      throw createPublishError("SCRIPT_INJECTION_FAILED", "Unable to confirm Baidu Yun folder name")
+    }
+
+    clickElement(confirmIcon)
+    await sleep(3000)
+  }
+
+  const countUploadedFiles = () => {
+    const pageText = document.body?.innerText || ""
+    return files.filter((file) => pageText.includes(file.name)).length
+  }
+
+  const loadFileBlob = async (fileInfo: YunPanData["files"][number]) => {
+    const response = await fetch(fileInfo.contentDataUrl || fileInfo.url)
+    if (!response.ok) {
+      throw createPublishError("SCRIPT_INJECTION_FAILED", `Failed to fetch file: ${fileInfo.name}`)
+    }
+
+    return await response.blob()
+  }
+
+  const uploadFiles = async () => {
+    const fileInput = (document.querySelector('input[title="点击选择文件"]') ||
+      document.querySelector('input[type="file"]')) as HTMLInputElement | null
+
+    if (!fileInput) {
+      throw createPublishError("SCRIPT_INJECTION_FAILED", "Unable to find Baidu Yun upload input")
+    }
+
+    const dataTransfer = new DataTransfer()
+
+    for (const fileInfo of files) {
+      const blob = await loadFileBlob(fileInfo)
+      dataTransfer.items.add(new File([blob], fileInfo.name, { type: fileInfo.type || blob.type }))
+    }
+
+    if (dataTransfer.files.length !== files.length) {
+      throw createPublishError("SCRIPT_INJECTION_FAILED", "Cloud file payload is incomplete")
+    }
+
+    fileInput.files = dataTransfer.files
+    fileInput.dispatchEvent(new Event("change", { bubbles: true }))
+    fileInput.dispatchEvent(new Event("input", { bubbles: true }))
+  }
+
+  try {
+    if (!files?.length) {
+      throw createPublishError("BAIDUYUN_UPLOAD_INCOMPLETE", "No files provided for Baidu Yun upload")
+    }
+
+    await waitForPageReady()
+    dismissBlockingDialogs()
+    await sleep(2000)
+
+    for (const path of getRemainingPaths()) {
+      await waitForPageReady()
+      dismissBlockingDialogs()
+
+      let directory = findDirectory(path)
+      if (!directory) {
+        await createFolder(path)
+        directory = findDirectory(path)
+      }
+
+      if (!directory) {
+        throw createPublishError("SCRIPT_INJECTION_FAILED", `Unable to find Baidu Yun folder: ${path}`)
+      }
+
+      clickElement(directory)
+      await sleep(3000)
+    }
+
+    await uploadFiles()
+    await sleep(10000)
+
+    const uploadedCount = countUploadedFiles()
+    if (uploadedCount < files.length) {
+      throw createPublishError(
+        "BAIDUYUN_UPLOAD_INCOMPLETE",
+        `Expected ${files.length} uploaded files, found ${uploadedCount}`,
+      )
+    }
+
+    sendResult(true, window.location.href)
+    return {
+      success: true,
+      publishUrl: window.location.href
+    }
+  } catch (error) {
+    const errorCode =
+      error instanceof Error && error.name && error.name !== "Error"
+        ? error.name
+        : "SCRIPT_INJECTION_FAILED"
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    sendResult(false, window.location.href, errorMessage, errorCode)
+    return {
+      success: false,
+      publishUrl: window.location.href,
+      errorCode,
+      errorMessage
+    }
+  }
 }

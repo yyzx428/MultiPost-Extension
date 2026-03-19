@@ -98,7 +98,7 @@ describe("background message flows (black-box)", () => {
     })
 
     const result = await pending
-    expect(result.traceId).toBe("t1")
+    expect(result.status).toBe("FAILED")
     expect(result.totalPlatforms).toBe(2)
     expect(result.successCount).toBe(1)
     expect(result.failureCount).toBe(1)

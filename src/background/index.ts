@@ -2,22 +2,41 @@
 export {}
 
 import { Storage } from "@plasmohq/storage"
-import { getAllAccountInfo } from "~sync/account"
-import {
-  createTabsForPlatforms,
-  getPlatformInfos,
-  type SyncData,
-  type SyncDataPlatform
-} from "~sync/common"
 
 import { fileOperationManager } from "../file-ops"
 import type { FileOperation, FileOperationResult } from "../file-ops/types"
 import QuantumEntanglementKeepAlive from "../utils/keep-alive"
 
 import { createMessageRouter } from "./messages/router"
-import { handleLinkExtensionMessage, starter } from "./services/api"
-import { addTabsManagerMessages, handleTabsManagerMessage, tabsManagerHandleTabRemoved, tabsManagerHandleTabUpdated } from "./services/tabs"
+import {
+  getExtensionLinkState,
+  handleLinkExtensionMessage,
+  reportTaskResult,
+  starter
+} from "./services/api"
+import {
+  addTabsManagerMessages,
+  handleTabsManagerMessage,
+  tabsManagerHandleTabRemoved,
+  tabsManagerHandleTabUpdated
+} from "./services/tabs"
 import { handleTrustDomainMessage } from "./services/trust-domain"
+
+import {
+  createTabsForPlatforms,
+  getPlatformInfos,
+  type SyncData
+} from "~sync/common"
+import { getPublishFailureForUrl } from "../sync/publish-post-condition"
+import type {
+  ChainActionExecutionResult,
+  ChainActionStageResult,
+  ExecutionItemStatus,
+  ExecutionTaskStatus,
+  PublishExecutionItem,
+  PublishExecutionResult,
+  PublishPlatformRuntimeStatus
+} from "~types/execution"
 
 const storage = new Storage({ area: "local" })
 
@@ -25,6 +44,39 @@ type Deferred<T> = {
   promise: Promise<T>
   resolve: (value: T) => void
   reject: (err: unknown) => void
+}
+
+type PublishPlatformState = {
+  platformName: string
+  status: PublishPlatformRuntimeStatus
+  startedAt: string
+  finishedAt?: string
+  publishUrl?: string
+  errorCode?: string
+  errorMessage?: string
+  tabId?: number
+  timeoutId?: number
+}
+
+type PublishSession = {
+  traceId?: string
+  taskId?: string
+  syncData: SyncData
+  platformOrder: string[]
+  platforms: Map<string, PublishPlatformState>
+  deferred: Deferred<PublishExecutionResult>
+  popupWindowId?: number
+  finalized: boolean
+}
+
+type ChainActionSession = {
+  action: string
+  config: Record<string, unknown>
+  traceId?: string
+  taskId?: string
+  deferred: Deferred<ChainActionExecutionResult>
+  startedAt: string
+  finalized: boolean
 }
 
 function createDeferred<T>(): Deferred<T> {
@@ -35,6 +87,163 @@ function createDeferred<T>(): Deferred<T> {
     reject = rej
   })
   return { promise, resolve, reject }
+}
+
+function nowIso() {
+  return new Date().toISOString()
+}
+
+function isTerminalStatus(status: PublishPlatformRuntimeStatus) {
+  return status === "success" || status === "failed" || status === "timeout"
+}
+
+function toExecutionStatus(status: PublishPlatformRuntimeStatus): ExecutionItemStatus {
+  if (status === "success") return "SUCCESS"
+  if (status === "timeout") return "TIMEOUT"
+  return "FAILED"
+}
+
+function buildPublishExecutionItem(state: PublishPlatformState): PublishExecutionItem {
+  return {
+    platformName: state.platformName,
+    status: toExecutionStatus(state.status),
+    publishUrl: state.publishUrl,
+    errorCode: state.errorCode,
+    errorMessage: state.errorMessage,
+    startedAt: state.startedAt,
+    finishedAt: state.finishedAt || nowIso(),
+    tabId: state.tabId
+  }
+}
+
+function buildPublishExecutionResult(
+  session: PublishSession,
+  overrides?: { errorCode?: string; errorMessage?: string },
+): PublishExecutionResult {
+  const results = session.platformOrder.map((platformName) => {
+    const state = session.platforms.get(platformName)
+    if (!state) {
+      const fallbackTime = nowIso()
+      return {
+        platformName,
+        status: "FAILED",
+        errorCode: overrides?.errorCode || "BACKGROUND_REJECTED",
+        errorMessage: overrides?.errorMessage || "Platform state missing",
+        startedAt: fallbackTime,
+        finishedAt: fallbackTime
+      } satisfies PublishExecutionItem
+    }
+    return buildPublishExecutionItem(state)
+  })
+
+  const successCount = results.filter((item) => item.status === "SUCCESS").length
+  const failureCount = results.length - successCount
+  const status: ExecutionTaskStatus = failureCount === 0 ? "COMPLETED" : "FAILED"
+
+  return {
+    kind: "publish",
+    traceId: session.traceId,
+    status,
+    totalPlatforms: results.length,
+    successCount,
+    failureCount,
+    results,
+    errorCode: overrides?.errorCode,
+    errorMessage: overrides?.errorMessage
+  }
+}
+
+function attachPersistFailureToPublish(
+  result: PublishExecutionResult,
+  message: string,
+): PublishExecutionResult {
+  return {
+    ...result,
+    status: "FAILED",
+    errorCode: "TASK_RESULT_PERSIST_FAILED",
+    errorMessage: message
+  }
+}
+
+function buildChainActionResult(
+  rawResult: Record<string, unknown>,
+  action: string,
+  startedAt: string,
+  overrides?: { errorCode?: string; errorMessage?: string },
+): ChainActionExecutionResult {
+  const stagesFromPayload = Array.isArray(rawResult.stages) ? (rawResult.stages as ChainActionStageResult[]) : undefined
+  const finishedAt = nowIso()
+
+  let stages = stagesFromPayload
+  if (!stages) {
+    const firstStageName = "baiduShare"
+    const secondStageName = action === "baidu-red" ? "redPublish" : "agisoPublish"
+    const baiduShareResult = rawResult.baiduShareResult
+    const downstreamResult = rawResult.redPublishResult || rawResult.agisoPublishResult
+    const success = rawResult.success === true
+    const errorMessage =
+      overrides?.errorMessage ||
+      (typeof rawResult.error === "string" ? rawResult.error : undefined) ||
+      "CHAIN_ACTION_FAILED"
+
+    stages = [
+      {
+        stageName: firstStageName,
+        status: baiduShareResult ? "SUCCESS" : "FAILED",
+        startedAt,
+        finishedAt,
+        errorCode: !baiduShareResult && !success ? overrides?.errorCode || "BACKGROUND_REJECTED" : undefined,
+        errorMessage: !baiduShareResult && !success ? errorMessage : undefined,
+        details: baiduShareResult && typeof baiduShareResult === "object" ? (baiduShareResult as Record<string, unknown>) : undefined
+      },
+      {
+        stageName: secondStageName,
+        status: downstreamResult && success ? "SUCCESS" : "FAILED",
+        startedAt,
+        finishedAt,
+        errorCode: !success ? overrides?.errorCode || "BACKGROUND_REJECTED" : undefined,
+        errorMessage: !success ? errorMessage : undefined,
+        details: downstreamResult && typeof downstreamResult === "object" ? (downstreamResult as Record<string, unknown>) : undefined
+      }
+    ]
+  }
+
+  const results = Array.isArray(rawResult.results) ? (rawResult.results as PublishExecutionItem[]) : []
+  const successCount = stages.filter((stage) => stage.status === "SUCCESS").length
+  const explicitFailure =
+    rawResult.status === "FAILED" ||
+    rawResult.success === false ||
+    typeof rawResult.errorMessage === "string" ||
+    typeof rawResult.error === "string" ||
+    !!overrides?.errorCode ||
+    !!overrides?.errorMessage
+  const failureCount = stages.length - successCount || (explicitFailure ? 1 : 0)
+
+  return {
+    kind: "chain-action",
+    status: failureCount === 0 ? "COMPLETED" : "FAILED",
+    totalPlatforms: stages.length,
+    successCount,
+    failureCount,
+    results,
+    stages,
+    errorCode:
+      overrides?.errorCode || (typeof rawResult.errorCode === "string" ? rawResult.errorCode : undefined),
+    errorMessage:
+      overrides?.errorMessage || (typeof rawResult.errorMessage === "string" ? rawResult.errorMessage : undefined)
+  }
+}
+
+function attachPersistFailureToChain(
+  result: ChainActionExecutionResult,
+  message: string,
+): ChainActionExecutionResult {
+  return {
+    ...result,
+    status: "FAILED",
+    errorCode: "TASK_RESULT_PERSIST_FAILED",
+    errorMessage: message
+  }
 }
 
 async function initDefaultTrustedDomains() {
@@ -52,32 +261,27 @@ async function executeFileOperationInTab(tabId: number, operation: FileOperation
     const results = await chrome.scripting.executeScript({
       target: { tabId },
       func: async (op: any) => {
-        try {
-          await new Promise<void>((resolve) => {
-            if (document.readyState === "complete") resolve()
-            else window.addEventListener("load", () => resolve())
+        await new Promise<void>((resolve) => {
+          if (document.readyState === "complete") resolve()
+          else window.addEventListener("load", () => resolve(), { once: true })
+        })
+
+        await new Promise((resolve) => setTimeout(resolve, 3000))
+
+        if (op.platform === "baiduyun" && op.operation === "share") {
+          return new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage(
+              { type: "EXECUTE_FILE_OPS_IN_TAB", operation: op, tabId: op.tabId },
+              (response) => {
+                if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message))
+                else if (response && response.success) resolve(response)
+                else reject(new Error(response?.error || "FILE_OP_FAILED"))
+              },
+            )
           })
-
-          await new Promise((resolve) => setTimeout(resolve, 3000))
-
-          if (op.platform === "baiduyun" && op.operation === "share") {
-            return new Promise((resolve, reject) => {
-              chrome.runtime.sendMessage(
-                { type: "EXECUTE_FILE_OPS_IN_TAB", operation: op, tabId: op.tabId },
-                (response) => {
-                  if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message))
-                  else if (response && response.success) resolve(response)
-                  else reject(new Error(response?.error || "FILE_OP_FAILED"))
-                },
-              )
-            })
-          }
-
-          throw new Error(`Unsupported operation: ${op.platform}.${op.operation}`)
-        } catch (error) {
-          console.error("File operation failed in tab:", error)
-          throw error
         }
+
+        throw new Error(`Unsupported operation: ${op.platform}.${op.operation}`)
       },
       args: [operation]
     })
@@ -97,8 +301,249 @@ async function executeFileOperationInTab(tabId: number, operation: FileOperation
   }
 }
 
-chrome.runtime.onInstalled.addListener((object) => {
-  if (object.reason === chrome.runtime.OnInstalledReason.INSTALL) {
+function emitRuntimeMessage(action: string, data: unknown) {
+  const sendMessage = chrome.runtime.sendMessage
+  if (typeof sendMessage !== "function") return
+  void sendMessage({ action, data }).catch(() => undefined)
+}
+
+let currentSyncData: SyncData | null = null
+let currentPublishPopup: chrome.windows.Window | null = null
+let currentPublishRequest: PublishSession | null = null
+let currentChainActionData: ChainActionSession | null = null
+
+function emitPublishProgress() {
+  if (!currentPublishRequest) return
+  const states = currentPublishRequest.platformOrder
+    .map((platformName) => currentPublishRequest?.platforms.get(platformName))
+    .filter(Boolean) as PublishPlatformState[]
+  emitRuntimeMessage("MUTLIPOST_EXTENSION_PUBLISH_PROGRESS", {
+    traceId: currentPublishRequest.traceId,
+    status: currentPublishRequest.finalized ? buildPublishExecutionResult(currentPublishRequest).status : "RUNNING",
+    totalPlatforms: states.length,
+    successCount: states.filter((item) => item.status === "success").length,
+    failureCount: states.filter((item) => item.status === "failed" || item.status === "timeout").length,
+    results: states.map((item) => ({
+      platformName: item.platformName,
+      status: item.status,
+      publishUrl: item.publishUrl,
+      errorCode: item.errorCode,
+      errorMessage: item.errorMessage,
+      startedAt: item.startedAt,
+      finishedAt: item.finishedAt,
+      tabId: item.tabId
+    }))
+  })
+}
+
+function setPlatformTimeout(platformName: string, timeoutMs: number) {
+  if (!currentPublishRequest) return
+  const state = currentPublishRequest.platforms.get(platformName)
+  if (!state) return
+
+  if (state.timeoutId) clearTimeout(state.timeoutId)
+  state.timeoutId = setTimeout(() => {
+    void markPublishPlatformResult({
+      traceId: currentPublishRequest?.traceId,
+      platformName,
+      success: false,
+      errorCode: "PLATFORM_TIMEOUT",
+      errorMessage: `Platform timed out after ${timeoutMs}ms`,
+      tabId: state.tabId,
+      timestamp: Date.now(),
+      isTimeout: true
+    })
+  }, timeoutMs) as unknown as number
+}
+
+function markPublishPlatformRunning(platformName: string, tabId?: number) {
+  if (!currentPublishRequest) return
+  const state = currentPublishRequest.platforms.get(platformName)
+  if (!state || isTerminalStatus(state.status)) return
+
+  state.status = "running"
+  state.startedAt = state.startedAt || nowIso()
+  state.tabId = tabId
+  const timeoutMs = platformName.includes("YUNPAN") ? 300_000 : 180_000
+  setPlatformTimeout(platformName, timeoutMs)
+  emitPublishProgress()
+}
+
+function getTrackedPublishPlatformState(tabId: number) {
+  if (!currentPublishRequest) return null
+
+  const state = [...currentPublishRequest.platforms.values()].find(
+    (item) => item.tabId === tabId && !isTerminalStatus(item.status),
+  )
+
+  if (!state) return null
+
+  const platformInfo = currentPublishRequest.syncData.platforms.find((item) => item.name === state.platformName)
+  return { state, platformInfo }
+}
+
+async function maybeMarkPublishFailureFromUrl(tabId: number, currentUrl?: string) {
+  if (!currentPublishRequest || !currentUrl) return
+
+  const tracked = getTrackedPublishPlatformState(tabId)
+  if (!tracked) return
+
+  const failure = getPublishFailureForUrl(
+    tracked.platformInfo
+      ? {
+          name: tracked.platformInfo.name,
+          injectUrl: tracked.platformInfo.injectUrl || currentUrl
+        }
+      : { injectUrl: currentUrl },
+    currentUrl,
+  )
+
+  if (!failure) return
+
+  await markPublishPlatformResult({
+    traceId: currentPublishRequest.traceId,
+    platformName: tracked.state.platformName,
+    success: false,
+    publishUrl: currentUrl,
+    errorCode: failure.errorCode,
+    errorMessage: failure.errorMessage,
+    tabId,
+    timestamp: Date.now()
+  })
+}
+
+async function finalizePublishSession(overrides?: { errorCode?: string; errorMessage?: string }) {
+  if (!currentPublishRequest || currentPublishRequest.finalized) return currentPublishRequest
+  const session = currentPublishRequest
+  session.finalized = true
+
+  const finalTime = nowIso()
+  for (const state of session.platforms.values()) {
+    if (state.timeoutId) {
+      clearTimeout(state.timeoutId)
+      state.timeoutId = undefined
+    }
+
+    if (!isTerminalStatus(state.status)) {
+      state.status = overrides?.errorCode ? "failed" : "timeout"
+      state.errorCode = overrides?.errorCode || "PLATFORM_TIMEOUT"
+      state.errorMessage = overrides?.errorMessage || "Platform did not report a terminal result"
+      state.finishedAt = finalTime
+    }
+  }
+
+  let result = buildPublishExecutionResult(session, overrides)
+
+  if (session.taskId) {
+    const { extensionClientId } = await getExtensionLinkState()
+    try {
+      await reportTaskResult({
+        taskId: session.taskId,
+        extensionClientId,
+        status: result.status,
+        errorMessage: result.errorMessage,
+        executionResult: result
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      result = attachPersistFailureToPublish(result, message)
+    }
+  }
+
+  emitRuntimeMessage("MUTLIPOST_EXTENSION_PUBLISH_COMPLETE", result)
+  session.deferred.resolve(result)
+  currentPublishRequest = null
+  return session
+}
+
+async function markPublishPlatformResult(result: {
+  traceId?: string
+  platformName: string
+  success: boolean
+  publishUrl?: string
+  errorCode?: string
+  errorMessage?: string
+  tabId?: number
+  timestamp?: number
+  isTimeout?: boolean
+}) {
+  if (!currentPublishRequest) return { success: false, error: "NO_PUBLISH_IN_PROGRESS" }
+  if (result.traceId && result.traceId !== currentPublishRequest.traceId) return { success: false, error: "TRACE_ID_MISMATCH" }
+
+  const state = currentPublishRequest.platforms.get(result.platformName)
+  if (!state) return { success: false, error: "UNKNOWN_PLATFORM" }
+  if (isTerminalStatus(state.status)) return { success: true, ignored: true }
+
+  if (state.timeoutId) {
+    clearTimeout(state.timeoutId)
+    state.timeoutId = undefined
+  }
+
+  state.status = result.success ? "success" : result.isTimeout ? "timeout" : "failed"
+  state.publishUrl = result.publishUrl
+  state.errorCode = result.success ? undefined : result.errorCode || "BACKGROUND_REJECTED"
+  state.errorMessage = result.success ? undefined : result.errorMessage || "Publish failed"
+  state.tabId = result.tabId ?? state.tabId
+  state.finishedAt = nowIso()
+  if (!state.startedAt) state.startedAt = state.finishedAt
+
+  emitPublishProgress()
+
+  const allTerminal = [...currentPublishRequest.platforms.values()].every((item) => isTerminalStatus(item.status))
+  if (allTerminal) {
+    await finalizePublishSession()
+  }
+
+  return { success: true }
+}
+
+async function abortPublish(errorCode: string, errorMessage: string) {
+  if (!currentPublishRequest) return { success: false, error: "NO_PUBLISH_IN_PROGRESS" }
+  await finalizePublishSession({ errorCode, errorMessage })
+  return { success: true }
+}
+
+async function ensureLinkedIfTask(taskId?: string) {
+  if (!taskId) return null
+  const { isLinked } = await getExtensionLinkState()
+  if (isLinked) return null
+
+  return {
+    success: false,
+    error: "EXTENSION_NOT_LINKED",
+    errorCode: "EXTENSION_NOT_LINKED"
+  }
+}
+
+async function finalizeChainActionResult(rawResult: Record<string, unknown>) {
+  if (!currentChainActionData || currentChainActionData.finalized) return null
+  const session = currentChainActionData
+  session.finalized = true
+
+  let result = buildChainActionResult(rawResult, session.action, session.startedAt)
+  if (session.taskId) {
+    const { extensionClientId } = await getExtensionLinkState()
+    try {
+      await reportTaskResult({
+        taskId: session.taskId,
+        extensionClientId,
+        status: result.status,
+        errorMessage: result.errorMessage,
+        executionResult: result
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      result = attachPersistFailureToChain(result, message)
+    }
+  }
+
+  session.deferred.resolve(result)
+  currentChainActionData = null
+  return result
+}
+
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) {
     chrome.tabs.create({ url: "https://multipost.app/on-install" })
   }
   void initDefaultTrustedDomains()
@@ -107,53 +552,32 @@ chrome.runtime.onInstalled.addListener((object) => {
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   tabsManagerHandleTabUpdated(tabId, changeInfo, tab)
+  if (changeInfo.status === "complete") {
+    void maybeMarkPublishFailureFromUrl(tabId, changeInfo.url || tab.url)
+  }
 })
+
 chrome.tabs.onRemoved.addListener((tabId) => {
   tabsManagerHandleTabRemoved(tabId)
-})
 
-// Message state (kept as singletons on purpose)
-let currentSyncData: SyncData | null = null
-let currentPublishPopup: chrome.windows.Window | null = null
-let currentPublishRequest: null | {
-  traceId?: string
-  expectedResultsCount: number
-  receivedResults: Array<{
-    traceId: string
-    platformName: string
-    success: boolean
-    publishUrl: string
-    errorMessage?: string
-    timestamp: number
-  }>
-  timeoutId?: number
-  deferred: Deferred<any>
-} = null
-
-let currentChainActionData: null | {
-  action: string
-  config: Record<string, unknown>
-  traceId?: string
-  deferred: Deferred<any>
-} = null
-
-function finalizePublishIfNeeded() {
   if (!currentPublishRequest) return
 
-  if (currentPublishRequest.timeoutId) clearTimeout(currentPublishRequest.timeoutId)
+  const state = [...currentPublishRequest.platforms.values()].find(
+    (item) => item.tabId === tabId && !isTerminalStatus(item.status),
+  )
 
-  const aggregatedResult = {
+  if (!state) return
+
+  void markPublishPlatformResult({
     traceId: currentPublishRequest.traceId,
-    totalPlatforms: currentPublishRequest.expectedResultsCount,
-    successCount: currentPublishRequest.receivedResults.filter((r) => r.success).length,
-    failureCount: currentPublishRequest.receivedResults.filter((r) => !r.success).length,
-    results: currentPublishRequest.receivedResults,
+    platformName: state.platformName,
+    success: false,
+    errorCode: "TAB_CLOSED",
+    errorMessage: "Platform tab was closed before a terminal result was reported",
+    tabId,
     timestamp: Date.now()
-  }
-
-  currentPublishRequest.deferred.resolve(aggregatedResult)
-  currentPublishRequest = null
-}
+  })
+})
 
 async function handleExecuteFileOps(request: any, sender: chrome.runtime.MessageSender) {
   const operationData = request.data?.data ?? request.data
@@ -177,12 +601,10 @@ async function handleExecuteFileOps(request: any, sender: chrome.runtime.Message
 
 const router = createMessageRouter()
 
-// Simple sync handler
-router.register("MUTLIPOST_EXTENSION_CHECK_SERVICE_STATUS", async () => {
-  return { extensionId: chrome.runtime.id }
-})
+router.register("MUTLIPOST_EXTENSION_CHECK_SERVICE_STATUS", async () => ({
+  extensionId: chrome.runtime.id
+}))
 
-// File ops
 router.register("MUTLIPOST_EXTENSION_EXECUTE_FILE_OPS", handleExecuteFileOps)
 router.register("EXECUTE_FILE_OPERATION", async (request: any) => {
   try {
@@ -216,97 +638,154 @@ router.register("EXECUTE_FILE_OPS_IN_TAB", async (request: any) => {
   }
 })
 
-// Tabs manager (type-based)
 router.register("MUTLIPOST_EXTENSION_REQUEST_PUBLISH_RELOAD", (req) => handleTabsManagerMessage(req as any))
 router.register("MUTLIPOST_EXTENSION_TABS_MANAGER_REQUEST_TABS", (req) => handleTabsManagerMessage(req as any))
 router.register("MUTLIPOST_EXTENSION_TABS_MANAGER_REQUEST_ADD_TABS", (req) => handleTabsManagerMessage(req as any))
 
-// Trust domain / link extension
 router.register("MUTLIPOST_EXTENSION_GET_TRUSTED_DOMAINS", (req, sender) => handleTrustDomainMessage(req as any, sender))
 router.register("MUTLIPOST_EXTENSION_DELETE_TRUSTED_DOMAIN", (req, sender) => handleTrustDomainMessage(req as any, sender))
 router.register("MUTLIPOST_EXTENSION_REQUEST_TRUST_DOMAIN", (req, sender) => handleTrustDomainMessage(req as any, sender))
 router.register("MUTLIPOST_EXTENSION_LINK_EXTENSION", (req) => handleLinkExtensionMessage(req as any))
 
-// Publish flow (single in-flight)
 router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any) => {
   if (currentPublishRequest) {
-    return { success: false, error: "PUBLISH_ALREADY_IN_PROGRESS" }
+    return {
+      success: false,
+      error: "PUBLISH_ALREADY_IN_PROGRESS",
+      errorCode: "PUBLISH_ALREADY_IN_PROGRESS"
+    }
   }
 
   const data = request.data as SyncData
+  if (data.taskId) {
+    const linkError = await ensureLinkedIfTask(data.taskId)
+    if (linkError) return linkError
+  }
+
   data.traceId = request.traceId
   currentSyncData = data
 
-  const deferred = createDeferred<any>()
+  const deferred = createDeferred<PublishExecutionResult>()
+  const platformOrder = data.platforms.map((platform) => platform.name)
+  const startedAt = nowIso()
+  const platforms = new Map<string, PublishPlatformState>(
+    platformOrder.map((platformName) => [
+      platformName,
+      {
+        platformName,
+        status: "pending",
+        startedAt
+      }
+    ]),
+  )
+
   currentPublishRequest = {
     traceId: request.traceId,
-    expectedResultsCount: data.platforms.length,
-    receivedResults: [],
-    timeoutId: setTimeout(() => finalizePublishIfNeeded(), 5 * 60 * 1000) as any,
-    deferred
+    taskId: data.taskId,
+    syncData: data,
+    platformOrder,
+    platforms,
+    deferred,
+    finalized: false
   }
 
   void chrome.windows
     .create({ url: chrome.runtime.getURL("tabs/publish.html"), type: "popup", width: 800, height: 600 })
-    .then((w) => {
-      currentPublishPopup = w
+    .then((windowInfo) => {
+      currentPublishPopup = windowInfo
+      if (currentPublishRequest) {
+        currentPublishRequest.popupWindowId = windowInfo.id
+      }
     })
 
+  emitPublishProgress()
   return deferred.promise
 })
 
 router.register("MUTLIPOST_EXTENSION_PUBLISH_RESULT", async (request: any) => {
-  const result = request.data
-  if (currentPublishRequest && result?.traceId === currentPublishRequest.traceId) {
-    currentPublishRequest.receivedResults.push(result)
-    if (currentPublishRequest.receivedResults.length >= currentPublishRequest.expectedResultsCount) {
-      finalizePublishIfNeeded()
-    }
-  }
-  return { success: true }
+  const result = request.data || {}
+  return markPublishPlatformResult({
+    traceId: result.traceId,
+    platformName: result.platformName,
+    success: result.success === true,
+    publishUrl: result.publishUrl,
+    errorCode: result.errorCode,
+    errorMessage: result.errorMessage,
+    tabId: result.tabId,
+    timestamp: result.timestamp
+  })
 })
 
-router.register("MUTLIPOST_EXTENSION_PUBLISH_REQUEST_SYNC_DATA", async () => {
-  return { syncData: currentSyncData }
+router.register("MUTLIPOST_EXTENSION_PUBLISH_ABORT", async (request: any) => {
+  const result = request.data || {}
+  return abortPublish(result.errorCode || "ASSET_PREFLIGHT_FAILED", result.errorMessage || "Asset preflight failed")
 })
+
+router.register("MUTLIPOST_EXTENSION_PUBLISH_REQUEST_SYNC_DATA", async () => ({ syncData: currentSyncData }))
 
 router.register("MUTLIPOST_EXTENSION_PUBLISH_NOW", async (request: any) => {
   const data = request.data as SyncData
-  if (!Array.isArray(data.platforms) || data.platforms.length === 0) return { error: "NO_PLATFORMS" }
-
-  const tabs = await createTabsForPlatforms(data)
-  addTabsManagerMessages({
-    syncData: data,
-    tabs: tabs.map((t: { tab: chrome.tabs.Tab; platformInfo: SyncDataPlatform }) => ({
-      tab: t.tab,
-      platformInfo: t.platformInfo
-    }))
-  })
-
-  if (currentPublishPopup?.id) {
-    await chrome.windows.update(currentPublishPopup.id, { focused: true })
+  if (!Array.isArray(data.platforms) || data.platforms.length === 0) {
+    return { success: false, error: "NO_PLATFORMS", errorCode: "BACKGROUND_REJECTED" }
   }
 
-  return {
-    tabs: tabs.map((t: { tab: chrome.tabs.Tab; platformInfo: SyncDataPlatform }) => ({
-      tab: t.tab,
-      platformInfo: t.platformInfo
-    }))
+  try {
+    const tabs = await createTabsForPlatforms(data)
+    addTabsManagerMessages({
+      syncData: data,
+      tabs: tabs.map((item) => ({ tab: item.tab, platformInfo: item.platformInfo }))
+    })
+
+    for (const item of tabs) {
+      markPublishPlatformRunning(item.platformInfo.name, item.tab.id)
+      if (item.tab.id) {
+        const latestTab = await chrome.tabs.get(item.tab.id).catch(() => item.tab)
+        await maybeMarkPublishFailureFromUrl(item.tab.id, latestTab?.url || item.tab.url)
+      }
+    }
+
+    if (currentPublishPopup?.id) {
+      await chrome.windows.update(currentPublishPopup.id, { focused: true })
+    }
+
+    return {
+      tabs: tabs.map((item) => ({ tab: item.tab, platformInfo: item.platformInfo }))
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await abortPublish("SCRIPT_INJECTION_FAILED", message)
+    return {
+      success: false,
+      error: message,
+      errorCode: "SCRIPT_INJECTION_FAILED"
+    }
   }
 })
 
-// Chain action flow (single in-flight)
 router.register("MUTLIPOST_EXTENSION_CHAIN_ACTION", async (request: any) => {
   if (currentChainActionData) {
-    return { success: false, error: "CHAIN_ACTION_ALREADY_IN_PROGRESS" }
+    return {
+      success: false,
+      error: "CHAIN_ACTION_ALREADY_IN_PROGRESS",
+      errorCode: "CHAIN_ACTION_ALREADY_IN_PROGRESS"
+    }
   }
 
-  const deferred = createDeferred<any>()
+  const taskId = request.data?.taskId as string | undefined
+  if (taskId) {
+    const linkError = await ensureLinkedIfTask(taskId)
+    if (linkError) return linkError
+  }
+
+  const deferred = createDeferred<ChainActionExecutionResult>()
   currentChainActionData = {
     action: request.data?.action,
     config: request.data?.config,
     traceId: request.traceId,
-    deferred
+    taskId,
+    deferred,
+    startedAt: nowIso(),
+    finalized: false
   }
 
   void chrome.windows.create({
@@ -319,26 +798,30 @@ router.register("MUTLIPOST_EXTENSION_CHAIN_ACTION", async (request: any) => {
   return deferred.promise
 })
 
-router.register("MUTLIPOST_EXTENSION_CHAIN_ACTION_REQUEST_DATA", async () => {
-  return { config: currentChainActionData }
-})
+router.register("MUTLIPOST_EXTENSION_CHAIN_ACTION_REQUEST_DATA", async () => ({
+  config: currentChainActionData
+}))
 
 router.register("MUTLIPOST_EXTENSION_CHAIN_ACTION_COMPLETE", async (request: any) => {
-  if (currentChainActionData) {
-    currentChainActionData.deferred.resolve(request.data)
-    currentChainActionData = null
-    return { success: true }
+  if (!currentChainActionData) {
+    return { success: false, error: "NO_CHAIN_ACTION_IN_PROGRESS", errorCode: "BACKGROUND_REJECTED" }
   }
-  return { success: false, error: "NO_CHAIN_ACTION_IN_PROGRESS" }
+
+  const result = await finalizeChainActionResult((request.data || {}) as Record<string, unknown>)
+  if (!result) {
+    return { success: false, error: "NO_CHAIN_ACTION_IN_PROGRESS", errorCode: "BACKGROUND_REJECTED" }
+  }
+
+  return { success: true, data: result }
 })
 
-// Misc
 router.register("MUTLIPOST_EXTENSION_PLATFORMS", async () => {
   const platforms = await getPlatformInfos()
   return { platforms }
 })
 
 router.register("MUTLIPOST_EXTENSION_GET_ACCOUNT_INFOS", async () => {
+  const { getAllAccountInfo } = await import("~sync/account")
   const accountInfo = await getAllAccountInfo()
   return { accountInfo }
 })

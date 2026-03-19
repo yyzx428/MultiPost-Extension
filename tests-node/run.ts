@@ -33,7 +33,7 @@ async function runFile(relPathFromDist: string): Promise<{ passed: number; faile
 }
 
 async function main() {
-  const files = ["./background.message-flows.test.js"]
+  const files = ["./background.message-flows.test.js", "./publish-post-condition.test.js", "./publish-assets.test.js"]
 
   let passed = 0
   let failed = 0

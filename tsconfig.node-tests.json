@@ -13,7 +13,8 @@
     "paths": {
       "~sync/common": ["tests-node/stubs/sync/common.ts"],
       "~sync/account": ["tests-node/stubs/sync/account.ts"],
-      "~utils/config": ["tests-node/stubs/utils/config.ts"]
+      "~utils/config": ["tests-node/stubs/utils/config.ts"],
+      "~types/*": ["src/types/*"]
     },
     "types": ["node", "chrome"]
   },

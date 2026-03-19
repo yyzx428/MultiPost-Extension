@@ -1,5 +1,5 @@
-import { createdInputs } from '../helper';
-import { waitForElement } from './common';
+import { createdInputs } from "./input-tracker"
+import { waitForElement } from "./common"
 
 let isProcessingVideo = false;
 
