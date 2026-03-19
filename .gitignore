@@ -4,6 +4,8 @@
 .edge*/
 .debug-profile/
 
+MultiPost-Extension.code-workspace
+
 # dependencies
 /node_modules
 /.pnp
