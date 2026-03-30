@@ -62,10 +62,13 @@ type PublishSession = {
   traceId?: string
   taskId?: string
   syncData: SyncData
+  createdAt: number
   platformOrder: string[]
   platforms: Map<string, PublishPlatformState>
   deferred: Deferred<PublishExecutionResult>
   popupWindowId?: number
+  popupReady: boolean
+  popupInitTimeoutId?: number
   finalized: boolean
 }
 
@@ -311,6 +314,8 @@ let currentSyncData: SyncData | null = null
 let currentPublishPopup: chrome.windows.Window | null = null
 let currentPublishRequest: PublishSession | null = null
 let currentChainActionData: ChainActionSession | null = null
+const PUBLISH_POPUP_INIT_TIMEOUT_MS = 30_000
+const STALE_PUBLISH_SESSION_TIMEOUT_MS = 60_000
 
 function emitPublishProgress() {
   if (!currentPublishRequest) return
@@ -417,6 +422,11 @@ async function finalizePublishSession(overrides?: { errorCode?: string; errorMes
   const session = currentPublishRequest
   session.finalized = true
 
+  if (session.popupInitTimeoutId) {
+    clearTimeout(session.popupInitTimeoutId)
+    session.popupInitTimeoutId = undefined
+  }
+
   const finalTime = nowIso()
   for (const state of session.platforms.values()) {
     if (state.timeoutId) {
@@ -453,6 +463,8 @@ async function finalizePublishSession(overrides?: { errorCode?: string; errorMes
   emitRuntimeMessage("MUTLIPOST_EXTENSION_PUBLISH_COMPLETE", result)
   session.deferred.resolve(result)
   currentPublishRequest = null
+  currentPublishPopup = null
+  currentSyncData = null
   return session
 }
 
@@ -501,6 +513,56 @@ async function abortPublish(errorCode: string, errorMessage: string) {
   if (!currentPublishRequest) return { success: false, error: "NO_PUBLISH_IN_PROGRESS" }
   await finalizePublishSession({ errorCode, errorMessage })
   return { success: true }
+}
+
+async function popupWindowExists(windowId?: number) {
+  if (!windowId) return false
+  try {
+    await chrome.windows.get(windowId)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function tabExists(tabId?: number) {
+  if (!tabId) return false
+  try {
+    await chrome.tabs.get(tabId)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function recoverStalePublishSession() {
+  const session = currentPublishRequest
+  if (!session || session.finalized) return false
+
+  const ageMs = Date.now() - session.createdAt
+  const hasStartedPlatform = [...session.platforms.values()].some((item) => item.status !== "pending")
+  const hasLivePlatformTab = (
+    await Promise.all(
+      [...session.platforms.values()]
+        .map((item) => item.tabId)
+        .filter((id): id is number => typeof id === "number")
+        .map((tabId) => tabExists(tabId)),
+    )
+  ).some(Boolean)
+  const hasLivePopup = await popupWindowExists(session.popupWindowId)
+
+  const shouldRecover =
+    (!hasStartedPlatform && !hasLivePopup) ||
+    (!hasStartedPlatform && ageMs > STALE_PUBLISH_SESSION_TIMEOUT_MS) ||
+    (!hasLivePopup && !hasLivePlatformTab && ageMs > STALE_PUBLISH_SESSION_TIMEOUT_MS)
+
+  if (!shouldRecover) return false
+
+  await finalizePublishSession({
+    errorCode: "STALE_PUBLISH_SESSION",
+    errorMessage: "Recovered stale publish session",
+  })
+  return true
 }
 
 async function ensureLinkedIfTask(taskId?: string) {
@@ -579,6 +641,16 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   })
 })
 
+chrome.windows.onRemoved.addListener((windowId) => {
+  if (!currentPublishRequest || currentPublishRequest.finalized) return
+  if (currentPublishRequest.popupWindowId !== windowId) return
+
+  const hasStartedPlatform = [...currentPublishRequest.platforms.values()].some((item) => item.status !== "pending")
+  if (!hasStartedPlatform) {
+    void abortPublish("PUBLISH_WINDOW_CLOSED", "Publish window closed before execution started")
+  }
+})
+
 async function handleExecuteFileOps(request: any, sender: chrome.runtime.MessageSender) {
   const operationData = request.data?.data ?? request.data
   const operation = operationData as FileOperation
@@ -649,6 +721,17 @@ router.register("MUTLIPOST_EXTENSION_LINK_EXTENSION", (req) => handleLinkExtensi
 
 router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any) => {
   if (currentPublishRequest) {
+    const recovered = await recoverStalePublishSession()
+    if (!recovered && currentPublishRequest) {
+      return {
+        success: false,
+        error: "PUBLISH_ALREADY_IN_PROGRESS",
+        errorCode: "PUBLISH_ALREADY_IN_PROGRESS"
+      }
+    }
+  }
+
+  if (currentPublishRequest) {
     return {
       success: false,
       error: "PUBLISH_ALREADY_IN_PROGRESS",
@@ -683,11 +766,17 @@ router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any) => {
     traceId: request.traceId,
     taskId: data.taskId,
     syncData: data,
+    createdAt: Date.now(),
     platformOrder,
     platforms,
     deferred,
+    popupReady: false,
     finalized: false
   }
+
+  currentPublishRequest.popupInitTimeoutId = setTimeout(() => {
+    void abortPublish("PUBLISH_WINDOW_TIMEOUT", "Publish window did not initialize in time")
+  }, PUBLISH_POPUP_INIT_TIMEOUT_MS) as unknown as number
 
   void chrome.windows
     .create({ url: chrome.runtime.getURL("tabs/publish.html"), type: "popup", width: 800, height: 600 })
@@ -696,6 +785,12 @@ router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any) => {
       if (currentPublishRequest) {
         currentPublishRequest.popupWindowId = windowInfo.id
       }
+    })
+    .catch((error) => {
+      void abortPublish(
+        "PUBLISH_WINDOW_CREATE_FAILED",
+        error instanceof Error ? error.message : String(error),
+      )
     })
 
   emitPublishProgress()
@@ -721,7 +816,17 @@ router.register("MUTLIPOST_EXTENSION_PUBLISH_ABORT", async (request: any) => {
   return abortPublish(result.errorCode || "ASSET_PREFLIGHT_FAILED", result.errorMessage || "Asset preflight failed")
 })
 
-router.register("MUTLIPOST_EXTENSION_PUBLISH_REQUEST_SYNC_DATA", async () => ({ syncData: currentSyncData }))
+router.register("MUTLIPOST_EXTENSION_PUBLISH_REQUEST_SYNC_DATA", async () => {
+  if (currentPublishRequest?.popupInitTimeoutId) {
+    clearTimeout(currentPublishRequest.popupInitTimeoutId)
+    currentPublishRequest.popupInitTimeoutId = undefined
+  }
+  if (currentPublishRequest) {
+    currentPublishRequest.popupReady = true
+  }
+
+  return { syncData: currentSyncData }
+})
 
 router.register("MUTLIPOST_EXTENSION_PUBLISH_NOW", async (request: any) => {
   const data = request.data as SyncData
