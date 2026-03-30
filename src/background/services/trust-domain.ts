@@ -1,5 +1,6 @@
 import { Storage } from "@plasmohq/storage"
 import { waitForRuntimeMessage } from "../messages/wait-for-runtime-message"
+import { createSafePopupWindow } from "./popup-window"
 
 const storage = new Storage({ area: "local" })
 
@@ -66,9 +67,8 @@ export const handleTrustDomainMessage = async (request: unknown, sender: chrome.
     )
 
     // Open popup after listener is attached (avoids race in tests/fast confirmations).
-    void chrome.windows.create({
+    void createSafePopupWindow({
       url: chrome.runtime.getURL(`tabs/trust-domain.html#${encodedParams}`),
-      type: "popup",
       width: 800,
       height: 600
     })

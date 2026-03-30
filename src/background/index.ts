@@ -14,6 +14,7 @@ import {
   reportTaskResult,
   starter
 } from "./services/api"
+import { createSafePopupWindow } from "./services/popup-window"
 import {
   addTabsManagerMessages,
   handleTabsManagerMessage,
@@ -422,6 +423,10 @@ async function finalizePublishSession(overrides?: { errorCode?: string; errorMes
   const session = currentPublishRequest
   session.finalized = true
 
+  currentPublishRequest = null
+  currentPublishPopup = null
+  currentSyncData = null
+
   if (session.popupInitTimeoutId) {
     clearTimeout(session.popupInitTimeoutId)
     session.popupInitTimeoutId = undefined
@@ -462,9 +467,6 @@ async function finalizePublishSession(overrides?: { errorCode?: string; errorMes
 
   emitRuntimeMessage("MUTLIPOST_EXTENSION_PUBLISH_COMPLETE", result)
   session.deferred.resolve(result)
-  currentPublishRequest = null
-  currentPublishPopup = null
-  currentSyncData = null
   return session
 }
 
@@ -778,11 +780,10 @@ router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any) => {
     void abortPublish("PUBLISH_WINDOW_TIMEOUT", "Publish window did not initialize in time")
   }, PUBLISH_POPUP_INIT_TIMEOUT_MS) as unknown as number
 
-  void chrome.windows
-    .create({ url: chrome.runtime.getURL("tabs/publish.html"), type: "popup", width: 800, height: 600 })
+  void createSafePopupWindow({ url: chrome.runtime.getURL("tabs/publish.html"), width: 800, height: 600 })
     .then((windowInfo) => {
-      currentPublishPopup = windowInfo
-      if (currentPublishRequest) {
+      if (currentPublishRequest && !currentPublishRequest.finalized) {
+        currentPublishPopup = windowInfo
         currentPublishRequest.popupWindowId = windowInfo.id
       }
     })
@@ -893,9 +894,8 @@ router.register("MUTLIPOST_EXTENSION_CHAIN_ACTION", async (request: any) => {
     finalized: false
   }
 
-  void chrome.windows.create({
+  void createSafePopupWindow({
     url: chrome.runtime.getURL("tabs/chain-action.html"),
-    type: "popup",
     width: 800,
     height: 600
   })
@@ -937,9 +937,8 @@ router.register("MUTLIPOST_EXTENSION_OPEN_OPTIONS", async () => {
 })
 
 router.register("MUTLIPOST_EXTENSION_REFRESH_ACCOUNT_INFOS", async (request: any) => {
-  await chrome.windows.create({
+  await createSafePopupWindow({
     url: chrome.runtime.getURL("tabs/refresh-accounts.html"),
-    type: "popup",
     width: 800,
     height: 600,
     focused: !!request.data?.isFocused

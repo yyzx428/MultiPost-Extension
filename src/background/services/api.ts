@@ -5,6 +5,7 @@ import { getPlatformInfos } from "~sync/common"
 import { API_BASE_URL } from "~utils/config"
 
 import { waitForRuntimeMessage } from "../messages/wait-for-runtime-message"
+import { createSafePopupWindow } from "./popup-window"
 
 const storage = new Storage({ area: "local" })
 
@@ -158,9 +159,8 @@ export const handleLinkExtensionMessage = async (request: { action?: string; dat
     { timeoutMs: 60_000 },
   )
 
-  void chrome.windows.create({
+  void createSafePopupWindow({
     url: chrome.runtime.getURL(`tabs/link-extension.html#${encodedParams}`),
-    type: "popup",
     width: 800,
     height: 600
   })
