@@ -28,6 +28,7 @@ const AUTO_CLOSE_KEY = "publish-auto-close"
 const AUTO_CLOSE_DELAY_KEY = "publish-auto-close-delay"
 const SYNC_CLOSE_TABS_KEY = "publish-sync-close-tabs"
 const DEFAULT_AUTO_CLOSE_DELAY = 120
+const MIN_AUTO_CLOSE_DELAY = 5
 
 const PLATFORM_MESSAGE_KEY_MAP: Record<string, string> = {
   AGISO: "platformAgiso",
@@ -117,6 +118,17 @@ function createPublishStartError(message: string, code?: string) {
   const error = new Error(message)
   if (code) error.name = code
   return error
+}
+
+function normalizeAutoCloseDelay(value: unknown) {
+  const parsed =
+    typeof value === "number" ? value : typeof value === "string" ? parseInt(value, 10) : Number.NaN
+
+  if (!Number.isFinite(parsed) || parsed < MIN_AUTO_CLOSE_DELAY) {
+    return DEFAULT_AUTO_CLOSE_DELAY
+  }
+
+  return parsed
 }
 
 type PlatformProgressItem = {
@@ -275,6 +287,7 @@ export default function Publish() {
   const [autoCloseDelay, setAutoCloseDelay] = useState(DEFAULT_AUTO_CLOSE_DELAY)
   const autoCloseTimerRef = useRef<number>()
   const countdownTimerRef = useRef<number>()
+  const autoCloseDelayRef = useRef(DEFAULT_AUTO_CLOSE_DELAY)
   const syncCloseTabsRef = useRef(false)
   const publishedTabsRef = useRef<Array<{ tab: chrome.tabs.Tab; platformInfo: SyncDataPlatform }>>([])
 
@@ -292,7 +305,7 @@ export default function Publish() {
     if (countdownTimerRef.current) clearInterval(countdownTimerRef.current)
   }
 
-  async function startAutoCloseTimer(delaySeconds = autoCloseDelay) {
+  async function startAutoCloseTimer(delaySeconds = autoCloseDelayRef.current) {
     clearAutoCloseTimers()
     setCountdown(delaySeconds)
 
@@ -437,15 +450,20 @@ export default function Publish() {
       storage.get(AUTO_CLOSE_KEY),
       storage.get(AUTO_CLOSE_DELAY_KEY),
       storage.get(SYNC_CLOSE_TABS_KEY)
-    ]).then(([storedAutoClose, storedDelay, storedSyncCloseTabs]) => {
+    ]).then(async ([storedAutoClose, storedDelay, storedSyncCloseTabs]) => {
       const nextAutoClose = storedAutoClose === undefined ? true : storedAutoClose === "true"
-      const nextDelay = storedDelay === undefined ? DEFAULT_AUTO_CLOSE_DELAY : parseInt(String(storedDelay), 10)
+      const nextDelay = normalizeAutoCloseDelay(storedDelay)
       const nextSyncCloseTabs = storedSyncCloseTabs === undefined ? true : storedSyncCloseTabs === "true"
 
       setAutoClose(nextAutoClose)
-      setAutoCloseDelay(Number.isFinite(nextDelay) ? nextDelay : DEFAULT_AUTO_CLOSE_DELAY)
+      setAutoCloseDelay(nextDelay)
+      autoCloseDelayRef.current = nextDelay
       setSyncCloseTabs(nextSyncCloseTabs)
       syncCloseTabsRef.current = nextSyncCloseTabs
+
+      if (storedDelay === undefined || String(storedDelay) !== String(nextDelay)) {
+        await storage.set(AUTO_CLOSE_DELAY_KEY, String(nextDelay))
+      }
     })
   }, [])
 
@@ -657,12 +675,11 @@ export default function Publish() {
                       size="sm"
                       variant="underlined"
                       min={5}
-                      max={300}
                       value={autoCloseDelay}
                       onChange={async (value) => {
-                        const next = typeof value === "number" ? value : parseInt(String(value), 10)
-                        if (!Number.isFinite(next) || next < 5) return
+                        const next = normalizeAutoCloseDelay(value)
                         setAutoCloseDelay(next)
+                        autoCloseDelayRef.current = next
                         await storage.set(AUTO_CLOSE_DELAY_KEY, String(next))
                         if (autoClose && result?.status === "COMPLETED") {
                           void startAutoCloseTimer(next)

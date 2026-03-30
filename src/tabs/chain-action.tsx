@@ -14,6 +14,7 @@ const storage = new Storage({ area: "local" })
 const AUTO_CLOSE_KEY = "chain-action-auto-close"
 const AUTO_CLOSE_DELAY_KEY = "chain-action-auto-close-delay"
 const DEFAULT_AUTO_CLOSE_DELAY = 120
+const MIN_AUTO_CLOSE_DELAY = 5
 
 type ChainActionConfig = {
   action: string
@@ -68,6 +69,17 @@ function formatStageName(stageName: string) {
   }
 }
 
+function normalizeAutoCloseDelay(value: unknown) {
+  const parsed =
+    typeof value === "number" ? value : typeof value === "string" ? parseInt(value, 10) : Number.NaN
+
+  if (!Number.isFinite(parsed) || parsed < MIN_AUTO_CLOSE_DELAY) {
+    return DEFAULT_AUTO_CLOSE_DELAY
+  }
+
+  return parsed
+}
+
 export function getShadowContainer() {
   return document.querySelector("#test-shadow")?.shadowRoot?.querySelector("#plasmo-shadow-container")
 }
@@ -93,6 +105,7 @@ export default function ChainActionModal() {
   const [countdown, setCountdown] = useState(0)
   const autoCloseTimerRef = useRef<number>()
   const countdownTimerRef = useRef<number>()
+  const autoCloseDelayRef = useRef(DEFAULT_AUTO_CLOSE_DELAY)
   const hasExecutedRef = useRef(false)
 
   const stages = useMemo(() => result?.stages || [], [result])
@@ -107,7 +120,7 @@ export default function ChainActionModal() {
     if (countdownTimerRef.current) clearInterval(countdownTimerRef.current)
   }
 
-  function startAutoCloseTimer(delaySeconds = autoCloseDelay) {
+  function startAutoCloseTimer(delaySeconds = autoCloseDelayRef.current) {
     clearAutoCloseTimers()
     setCountdown(delaySeconds)
 
@@ -186,10 +199,14 @@ export default function ChainActionModal() {
     setAvailableActions(getAvailableChainActions())
 
     Promise.all([storage.get(AUTO_CLOSE_KEY), storage.get(AUTO_CLOSE_DELAY_KEY)]).then(
-      ([storedAutoClose, storedDelay]) => {
+      async ([storedAutoClose, storedDelay]) => {
         setAutoClose(storedAutoClose === undefined ? true : storedAutoClose === "true")
-        const nextDelay = storedDelay === undefined ? DEFAULT_AUTO_CLOSE_DELAY : parseInt(String(storedDelay), 10)
-        setAutoCloseDelay(Number.isFinite(nextDelay) ? nextDelay : DEFAULT_AUTO_CLOSE_DELAY)
+        const nextDelay = normalizeAutoCloseDelay(storedDelay)
+        setAutoCloseDelay(nextDelay)
+        autoCloseDelayRef.current = nextDelay
+        if (storedDelay === undefined || String(storedDelay) !== String(nextDelay)) {
+          await storage.set(AUTO_CLOSE_DELAY_KEY, String(nextDelay))
+        }
       },
     )
 
@@ -331,12 +348,11 @@ export default function ChainActionModal() {
                       size="sm"
                       variant="underlined"
                       min={5}
-                      max={300}
                       value={autoCloseDelay}
                       onChange={async (value) => {
-                        const next = typeof value === "number" ? value : parseInt(String(value), 10)
-                        if (!Number.isFinite(next) || next < 5) return
+                        const next = normalizeAutoCloseDelay(value)
                         setAutoCloseDelay(next)
+                        autoCloseDelayRef.current = next
                         await storage.set(AUTO_CLOSE_DELAY_KEY, String(next))
                         if (result?.status === "COMPLETED" && autoClose) {
                           startAutoCloseTimer(next)
