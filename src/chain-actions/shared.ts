@@ -199,7 +199,7 @@ export async function executeBaiduSharePublishChain(
 
 export function createDefaultShareConfig(): ShareConfig {
   return {
-    validPeriod: "7澶?",
-    extractCodeType: "闅忔満鐢熸垚"
+    validPeriod: "7天",
+    extractCodeType: "随机生成"
   }
 }

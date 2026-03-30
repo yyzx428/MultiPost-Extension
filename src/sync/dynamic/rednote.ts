@@ -229,7 +229,7 @@ export async function DynamicRednote(data: SyncData): Promise<PublishResult> {
     const checkbox = wrapper?.querySelector('input[type="checkbox"]') as HTMLInputElement | null
     if (checkbox?.checked) return
 
-    ;((wrapper?.querySelector(".d-switch-box") as HTMLElement | null) || (wrapper as HTMLElement | null))?.click()
+      ; ((wrapper?.querySelector(".d-switch-box") as HTMLElement | null) || (wrapper as HTMLElement | null))?.click()
     await sleep(3000)
 
     const modal = document.querySelector(".originalContainer")
@@ -258,7 +258,7 @@ export async function DynamicRednote(data: SyncData): Promise<PublishResult> {
     const wrapper = timerLabel.closest(".custom-switch-wrapper")
     const checkbox = wrapper?.querySelector('input[type="checkbox"]') as HTMLInputElement | null
     if (wrapper && checkbox && !checkbox.checked) {
-      ;((wrapper.querySelector(".d-switch-box") as HTMLElement | null) || (wrapper as HTMLElement)).click()
+      ; ((wrapper.querySelector(".d-switch-box") as HTMLElement | null) || (wrapper as HTMLElement)).click()
       await sleep(1000)
     }
 
@@ -355,7 +355,7 @@ export async function DynamicRednote(data: SyncData): Promise<PublishResult> {
       throw createPublishError("SCRIPT_INJECTION_FAILED", "Rednote image upload did not finish")
     }
 
-    await sleep(3000)
+    await sleep(60000)
     await fillContent()
 
     if (shangpin) await selectProduct()

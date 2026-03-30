@@ -182,7 +182,7 @@ export async function BaiduYunPan(data: SyncData): Promise<PublishResult> {
     input.dispatchEvent(new KeyboardEvent("keydown", keyboardEventInit))
     input.dispatchEvent(new KeyboardEvent("keypress", keyboardEventInit))
     input.dispatchEvent(new KeyboardEvent("keyup", keyboardEventInit))
-   }
+  }
 
   const createFolder = async (name: string) => {
     const createButton =
@@ -293,7 +293,7 @@ export async function BaiduYunPan(data: SyncData): Promise<PublishResult> {
     }
 
     await uploadFiles()
-    await sleep(10000)
+    await sleep(60000)
 
     const uploadedCount = countUploadedFiles()
     if (uploadedCount < files.length) {
