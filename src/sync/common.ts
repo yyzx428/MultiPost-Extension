@@ -182,7 +182,10 @@ async function getTargetNormalWindowId() {
   const normalWindow = windows.find((windowInfo) => windowInfo.type === "normal")
   if (normalWindow?.id) return normalWindow.id
 
-  const createdWindow = await chrome.windows.create({ focused: false })
+  const createdWindow = await chrome.windows.create({
+    type: "popup",
+    focused: false
+  })
   return createdWindow.id
 }
 
