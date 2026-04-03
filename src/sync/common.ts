@@ -174,21 +174,9 @@ async function waitForTabComplete(tabId: number) {
   })
 }
 
-async function getTargetNormalWindowId() {
-  const windows = await chrome.windows.getAll()
-  const focusedNormalWindow = windows.find((windowInfo) => windowInfo.type === "normal" && windowInfo.focused)
-  if (focusedNormalWindow?.id) return focusedNormalWindow.id
-
-  const normalWindow = windows.find((windowInfo) => windowInfo.type === "normal")
-  if (normalWindow?.id) return normalWindow.id
-
-  return undefined
-}
-
-export async function createTabsForPlatforms(data: SyncData) {
+export async function createTabsForPlatforms(data: SyncData, targetWindowId?: number) {
   const tabs: Array<{ tab: chrome.tabs.Tab; platformInfo: SyncDataPlatform }> = []
   let groupId: number | undefined
-  const targetWindowId = await getTargetNormalWindowId()
 
   const tryGroupTab = async (tabId: number, tabWindowId?: number) => {
     if (tabWindowId !== targetWindowId || typeof targetWindowId !== "number") return

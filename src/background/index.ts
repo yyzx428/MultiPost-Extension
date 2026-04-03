@@ -64,6 +64,7 @@ type PublishSession = {
   taskId?: string
   syncData: SyncData
   createdAt: number
+  sourceWindowId?: number
   platformOrder: string[]
   platforms: Map<string, PublishPlatformState>
   deferred: Deferred<PublishExecutionResult>
@@ -721,7 +722,7 @@ router.register("MUTLIPOST_EXTENSION_DELETE_TRUSTED_DOMAIN", (req, sender) => ha
 router.register("MUTLIPOST_EXTENSION_REQUEST_TRUST_DOMAIN", (req, sender) => handleTrustDomainMessage(req as any, sender))
 router.register("MUTLIPOST_EXTENSION_LINK_EXTENSION", (req) => handleLinkExtensionMessage(req as any))
 
-router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any) => {
+router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any, sender) => {
   if (currentPublishRequest) {
     const recovered = await recoverStalePublishSession()
     if (!recovered && currentPublishRequest) {
@@ -769,6 +770,7 @@ router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any) => {
     taskId: data.taskId,
     syncData: data,
     createdAt: Date.now(),
+    sourceWindowId: sender.tab?.windowId,
     platformOrder,
     platforms,
     deferred,
@@ -826,17 +828,22 @@ router.register("MUTLIPOST_EXTENSION_PUBLISH_REQUEST_SYNC_DATA", async () => {
     currentPublishRequest.popupReady = true
   }
 
-  return { syncData: currentSyncData }
+  return {
+    syncData: currentSyncData,
+    targetWindowId: currentPublishRequest?.sourceWindowId
+  }
 })
 
 router.register("MUTLIPOST_EXTENSION_PUBLISH_NOW", async (request: any) => {
-  const data = request.data as SyncData
+  const payload = (request.data || {}) as { syncData?: SyncData; targetWindowId?: number }
+  const data = payload.syncData as SyncData
+  const targetWindowId = payload.targetWindowId
   if (!Array.isArray(data.platforms) || data.platforms.length === 0) {
     return { success: false, error: "NO_PLATFORMS", errorCode: "BACKGROUND_REJECTED" }
   }
 
   try {
-    const tabs = await createTabsForPlatforms(data)
+    const tabs = await createTabsForPlatforms(data, targetWindowId)
     addTabsManagerMessages({
       syncData: data,
       tabs: tabs.map((item) => ({ tab: item.tab, platformInfo: item.platformInfo }))
@@ -851,7 +858,7 @@ router.register("MUTLIPOST_EXTENSION_PUBLISH_NOW", async (request: any) => {
     }
 
     if (currentPublishPopup?.id) {
-      await chrome.windows.update(currentPublishPopup.id, { focused: true })
+      await chrome.windows.update(currentPublishPopup.id, { focused: true }).catch(() => undefined)
     }
 
     return {
