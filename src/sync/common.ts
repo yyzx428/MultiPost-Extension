@@ -182,11 +182,7 @@ async function getTargetNormalWindowId() {
   const normalWindow = windows.find((windowInfo) => windowInfo.type === "normal")
   if (normalWindow?.id) return normalWindow.id
 
-  const createdWindow = await chrome.windows.create({
-    type: "popup",
-    focused: false
-  })
-  return createdWindow.id
+  return undefined
 }
 
 export async function createTabsForPlatforms(data: SyncData) {
@@ -225,7 +221,9 @@ export async function createTabsForPlatforms(data: SyncData) {
 
     for (const url of urls) {
       const platformInfo: SyncDataPlatform = { ...basePlatform, injectUrl: url }
-      const tab = await chrome.tabs.create({ url, windowId: targetWindowId, active: true })
+      const tab = await chrome.tabs.create(
+        typeof targetWindowId === "number" ? { url, windowId: targetWindowId, active: true } : { url, active: true },
+      )
 
       if (!tab.id) continue
 

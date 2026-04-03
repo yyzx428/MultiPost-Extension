@@ -290,6 +290,7 @@ export default function Publish() {
   const autoCloseDelayRef = useRef(DEFAULT_AUTO_CLOSE_DELAY)
   const syncCloseTabsRef = useRef(false)
   const publishedTabsRef = useRef<Array<{ tab: chrome.tabs.Tab; platformInfo: SyncDataPlatform }>>([])
+  const syncDataRef = useRef<SyncData | null>(null)
 
   const platformResults = useMemo(() => {
     if (result?.results?.length) return result.results
@@ -303,6 +304,12 @@ export default function Publish() {
   function clearAutoCloseTimers() {
     if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current)
     if (countdownTimerRef.current) clearInterval(countdownTimerRef.current)
+  }
+
+  function shouldHandleTrace(traceId?: string) {
+    const currentTraceId = syncDataRef.current?.traceId
+    if (!currentTraceId) return true
+    return !!traceId && traceId === currentTraceId
   }
 
   async function startAutoCloseTimer(delaySeconds = autoCloseDelayRef.current) {
@@ -468,6 +475,10 @@ export default function Publish() {
   }, [])
 
   useEffect(() => {
+    syncDataRef.current = syncData
+  }, [syncData])
+
+  useEffect(() => {
     const handleTabUpdated = (tabId: number, _changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
       setPublishedTabs((prev) => prev.map((item) => (item.tab.id === tabId ? { ...item, tab } : item)))
       publishedTabsRef.current = publishedTabsRef.current.map((item) =>
@@ -483,6 +494,7 @@ export default function Publish() {
     const handleRuntimeMessage = (message: { action?: string; data?: unknown }) => {
       if (message.action === "MUTLIPOST_EXTENSION_PUBLISH_PROGRESS") {
         const nextProgress = message.data as PublishProgressPayload
+        if (!shouldHandleTrace(nextProgress.traceId)) return
         setProgress(nextProgress)
         setNotice(
           nextProgress.failureCount > 0
@@ -497,6 +509,7 @@ export default function Publish() {
 
       if (message.action === "MUTLIPOST_EXTENSION_PUBLISH_COMPLETE") {
         const publishResult = message.data as PublishExecutionResult
+        if (!shouldHandleTrace(publishResult.traceId)) return
         setResult(publishResult)
         setIsProcessing(false)
         setNotice(
@@ -527,11 +540,13 @@ export default function Publish() {
         return
       }
 
+      syncDataRef.current = data
       setSyncData(data)
       setTitle(getTitleFromData(data))
 
       try {
         const processed = await processContentStrict(data)
+        syncDataRef.current = processed
         setSyncData(processed)
         await requestPublishNow(processed)
       } catch (error) {
