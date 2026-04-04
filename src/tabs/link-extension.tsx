@@ -21,6 +21,9 @@ export const getStyle = () => {
 
 interface LinkExtensionParams {
   apiKey: string;
+  autoRelinkEnabled?: boolean;
+  autoRelinkEmail?: string;
+  autoRelinkPassword?: string;
 }
 
 interface FeedbackState {
@@ -71,12 +74,25 @@ const LinkExtension = () => {
     try {
       if (confirm) {
         await storage.set('apiKey', params.apiKey);
+        await storage.set('autoRelinkEnabled', params.autoRelinkEnabled ?? false);
+
+        if (params.autoRelinkEmail) {
+          await storage.set('autoRelinkEmail', params.autoRelinkEmail);
+        } else {
+          await storage.remove('autoRelinkEmail');
+        }
+
+        if (params.autoRelinkPassword) {
+          await storage.set('autoRelinkPassword', params.autoRelinkPassword);
+        } else {
+          await storage.remove('autoRelinkPassword');
+        }
+
         setFeedback({
           type: 'success',
           message: chrome.i18n.getMessage('linkExtensionSuccess'),
         });
       } else {
-        await storage.remove('apiKey');
         setFeedback({
           type: 'error',
           message: chrome.i18n.getMessage('linkExtensionRejected'),
