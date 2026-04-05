@@ -19,8 +19,7 @@ const ACTIONS_NOT_NEED_TRUST_DOMAIN = [
   "MUTLIPOST_EXTENSION_FILE_OPERATION"
 ]
 
-let publishRequestSource: MessageEventSource | null = null
-let publishRequestTraceId: string | null = null
+const publishRequestSources = new Map<string, MessageEventSource>()
 
 async function isOriginTrusted(origin: string, action: string): Promise<boolean> {
   if (ACTIONS_NOT_NEED_TRUST_DOMAIN.includes(action)) return true
@@ -79,8 +78,9 @@ window.addEventListener("message", async (event) => {
   }
 
   if (request.action === "MUTLIPOST_EXTENSION_PUBLISH") {
-    publishRequestSource = event.source
-    publishRequestTraceId = request.traceId
+    if (event.source) {
+      publishRequestSources.set(request.traceId, event.source)
+    }
   }
 
   await defaultHandler(request, event)
@@ -88,19 +88,23 @@ window.addEventListener("message", async (event) => {
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action !== "MUTLIPOST_EXTENSION_PUBLISH_COMPLETE") return
-  if (!publishRequestSource || !publishRequestTraceId) return
+
+  const traceId = (message.data as { traceId?: string } | undefined)?.traceId
+  if (!traceId) return
+
+  const publishRequestSource = publishRequestSources.get(traceId)
+  if (!publishRequestSource) return
 
   publishRequestSource.postMessage({
     type: "response",
-    traceId: publishRequestTraceId,
+    traceId,
     action: "MUTLIPOST_EXTENSION_PUBLISH_COMPLETE",
     code: 0,
     message: "success",
     data: message.data
   })
 
-  publishRequestSource = null
-  publishRequestTraceId = null
+  publishRequestSources.delete(traceId)
 })
 
 async function defaultHandler<T>(request: ExtensionExternalRequest<T>, event: MessageEvent) {
@@ -119,6 +123,9 @@ async function defaultHandler<T>(request: ExtensionExternalRequest<T>, event: Me
   try {
     const response = await chrome.runtime.sendMessage(request)
     if (isFailurePayload(response)) {
+      if (request.action === "MUTLIPOST_EXTENSION_PUBLISH") {
+        publishRequestSources.delete(request.traceId)
+      }
       event.source?.postMessage(
         failureResponse(
           request,
@@ -132,6 +139,9 @@ async function defaultHandler<T>(request: ExtensionExternalRequest<T>, event: Me
 
     event.source?.postMessage(successResponse(request, response))
   } catch (error) {
+    if (request.action === "MUTLIPOST_EXTENSION_PUBLISH") {
+      publishRequestSources.delete(request.traceId)
+    }
     event.source?.postMessage(
       failureResponse(request, 500, error instanceof Error ? error.message : String(error)),
     )

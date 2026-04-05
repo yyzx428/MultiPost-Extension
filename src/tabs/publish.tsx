@@ -265,6 +265,10 @@ async function processShangPin(data: SyncData): Promise<SyncData> {
 }
 
 export default function Publish() {
+  const popupTraceId = useMemo(() => {
+    const traceId = new URLSearchParams(window.location.search).get("traceId")
+    return traceId || undefined
+  }, [])
   const [title, setTitle] = useState<string | null>(null)
   const [notice, setNotice] = useState<string>(() => t("publishPreparingTask", "正在准备发布任务"))
   const [isProcessing, setIsProcessing] = useState(true)
@@ -299,7 +303,7 @@ export default function Publish() {
   }
 
   function shouldHandleTrace(traceId?: string) {
-    const currentTraceId = syncDataRef.current?.traceId
+    const currentTraceId = syncDataRef.current?.traceId || popupTraceId
     if (!currentTraceId) return true
     return !!traceId && traceId === currentTraceId
   }
@@ -422,7 +426,10 @@ export default function Publish() {
     setNotice(t("publishOpeningPlatformTabs", "正在打开平台标签页"))
     const response = await chrome.runtime.sendMessage({
       action: "MUTLIPOST_EXTENSION_PUBLISH_NOW",
-      data: processedData
+      data: {
+        traceId: popupTraceId || processedData.traceId,
+        syncData: processedData
+      }
     })
 
     if (response?.success === false) {
@@ -522,7 +529,20 @@ export default function Publish() {
     chrome.tabs.onRemoved.addListener(handleTabRemoved)
     chrome.runtime.onMessage.addListener(handleRuntimeMessage)
 
-    chrome.runtime.sendMessage({ action: "MUTLIPOST_EXTENSION_PUBLISH_REQUEST_SYNC_DATA" }, async (response) => {
+    if (!popupTraceId) {
+      setNotice(t("publishReadTaskFailed", "鏃犳硶璇诲彇鍙戝竷浠诲姟"))
+      setIsProcessing(false)
+      return () => {
+        chrome.tabs.onUpdated.removeListener(handleTabUpdated)
+        chrome.tabs.onRemoved.removeListener(handleTabRemoved)
+        chrome.runtime.onMessage.removeListener(handleRuntimeMessage)
+      }
+    }
+
+    chrome.runtime.sendMessage({
+      action: "MUTLIPOST_EXTENSION_PUBLISH_REQUEST_SYNC_DATA",
+      data: { traceId: popupTraceId }
+    }, async (response) => {
       const data = response?.syncData as SyncData | undefined
       if (!data) {
         setNotice(t("publishReadTaskFailed", "无法读取发布任务"))
@@ -551,6 +571,7 @@ export default function Publish() {
         await chrome.runtime.sendMessage({
           action: "MUTLIPOST_EXTENSION_PUBLISH_ABORT",
           data: {
+            traceId: popupTraceId,
             errorCode:
               error instanceof Error && error.name === "SCRIPT_INJECTION_FAILED"
                 ? "SCRIPT_INJECTION_FAILED"
@@ -566,7 +587,7 @@ export default function Publish() {
       chrome.tabs.onRemoved.removeListener(handleTabRemoved)
       chrome.runtime.onMessage.removeListener(handleRuntimeMessage)
     }
-  }, [autoClose])
+  }, [autoClose, popupTraceId])
 
   const progressValue = result
     ? 100
