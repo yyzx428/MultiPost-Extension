@@ -64,7 +64,6 @@ type PublishSession = {
   taskId?: string
   syncData: SyncData
   createdAt: number
-  sourceWindowId?: number
   platformOrder: string[]
   platforms: Map<string, PublishPlatformState>
   deferred: Deferred<PublishExecutionResult>
@@ -722,7 +721,7 @@ router.register("MUTLIPOST_EXTENSION_DELETE_TRUSTED_DOMAIN", (req, sender) => ha
 router.register("MUTLIPOST_EXTENSION_REQUEST_TRUST_DOMAIN", (req, sender) => handleTrustDomainMessage(req as any, sender))
 router.register("MUTLIPOST_EXTENSION_LINK_EXTENSION", (req) => handleLinkExtensionMessage(req as any))
 
-router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any, sender) => {
+router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any) => {
   if (currentPublishRequest) {
     const recovered = await recoverStalePublishSession()
     if (!recovered && currentPublishRequest) {
@@ -770,7 +769,6 @@ router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any, sender) => {
     taskId: data.taskId,
     syncData: data,
     createdAt: Date.now(),
-    sourceWindowId: sender.tab?.windowId,
     platformOrder,
     platforms,
     deferred,
@@ -828,22 +826,17 @@ router.register("MUTLIPOST_EXTENSION_PUBLISH_REQUEST_SYNC_DATA", async () => {
     currentPublishRequest.popupReady = true
   }
 
-  return {
-    syncData: currentSyncData,
-    targetWindowId: currentPublishRequest?.sourceWindowId
-  }
+  return { syncData: currentSyncData }
 })
 
 router.register("MUTLIPOST_EXTENSION_PUBLISH_NOW", async (request: any) => {
-  const payload = (request.data || {}) as { syncData?: SyncData; targetWindowId?: number }
-  const data = payload.syncData as SyncData
-  const targetWindowId = payload.targetWindowId
+  const data = request.data as SyncData
   if (!Array.isArray(data.platforms) || data.platforms.length === 0) {
     return { success: false, error: "NO_PLATFORMS", errorCode: "BACKGROUND_REJECTED" }
   }
 
   try {
-    const tabs = await createTabsForPlatforms(data, targetWindowId)
+    const tabs = await createTabsForPlatforms(data)
     addTabsManagerMessages({
       syncData: data,
       tabs: tabs.map((item) => ({ tab: item.tab, platformInfo: item.platformInfo }))

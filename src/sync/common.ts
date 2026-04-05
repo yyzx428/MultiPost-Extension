@@ -174,16 +174,18 @@ async function waitForTabComplete(tabId: number) {
   })
 }
 
-export async function createTabsForPlatforms(data: SyncData, targetWindowId?: number) {
+export async function createTabsForPlatforms(data: SyncData) {
   const tabs: Array<{ tab: chrome.tabs.Tab; platformInfo: SyncDataPlatform }> = []
-  let groupId: number | undefined
+  const groupIdsByWindow = new Map<number, number>()
 
   const tryGroupTab = async (tabId: number, tabWindowId?: number) => {
-    if (tabWindowId !== targetWindowId || typeof targetWindowId !== "number") return
+    if (typeof tabWindowId !== "number") return
 
     try {
-      if (!groupId) {
-        groupId = await chrome.tabs.group({ tabIds: [tabId] })
+      const existingGroupId = groupIdsByWindow.get(tabWindowId)
+
+      if (!existingGroupId) {
+        const groupId = await chrome.tabs.group({ tabIds: [tabId] })
         await chrome.tabGroups.update(groupId, {
           color: "blue",
           title: `${APP_NAME}-${new Date().toLocaleTimeString("zh-CN", {
@@ -191,10 +193,11 @@ export async function createTabsForPlatforms(data: SyncData, targetWindowId?: nu
             minute: "2-digit"
           })}`
         })
+        groupIdsByWindow.set(tabWindowId, groupId)
         return
       }
 
-      await chrome.tabs.group({ tabIds: [tabId], groupId })
+      await chrome.tabs.group({ tabIds: [tabId], groupId: existingGroupId })
     } catch (error) {
       console.warn("[MultiPost] ignore tab grouping failure", error)
     }
@@ -209,9 +212,7 @@ export async function createTabsForPlatforms(data: SyncData, targetWindowId?: nu
 
     for (const url of urls) {
       const platformInfo: SyncDataPlatform = { ...basePlatform, injectUrl: url }
-      const tab = await chrome.tabs.create(
-        typeof targetWindowId === "number" ? { url, windowId: targetWindowId, active: true } : { url, active: true },
-      )
+      const tab = await chrome.tabs.create({ url, active: true })
 
       if (!tab.id) continue
 

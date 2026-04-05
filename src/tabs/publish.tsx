@@ -418,14 +418,11 @@ export default function Publish() {
     window.close()
   }
 
-  async function requestPublishNow(processedData: SyncData, targetWindowId?: number) {
+  async function requestPublishNow(processedData: SyncData) {
     setNotice(t("publishOpeningPlatformTabs", "正在打开平台标签页"))
     const response = await chrome.runtime.sendMessage({
       action: "MUTLIPOST_EXTENSION_PUBLISH_NOW",
-      data: {
-        syncData: processedData,
-        targetWindowId
-      }
+      data: processedData
     })
 
     if (response?.success === false) {
@@ -527,8 +524,6 @@ export default function Publish() {
 
     chrome.runtime.sendMessage({ action: "MUTLIPOST_EXTENSION_PUBLISH_REQUEST_SYNC_DATA" }, async (response) => {
       const data = response?.syncData as SyncData | undefined
-      const targetWindowId =
-        typeof response?.targetWindowId === "number" ? (response.targetWindowId as number) : undefined
       if (!data) {
         setNotice(t("publishReadTaskFailed", "无法读取发布任务"))
         setIsProcessing(false)
@@ -543,7 +538,7 @@ export default function Publish() {
         const processed = await processContentStrict(data)
         syncDataRef.current = processed
         setSyncData(processed)
-        await requestPublishNow(processed, targetWindowId)
+        await requestPublishNow(processed)
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         addError(message)
