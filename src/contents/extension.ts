@@ -137,6 +137,17 @@ async function defaultHandler<T>(request: ExtensionExternalRequest<T>, event: Me
       return
     }
 
+    if (
+      request.action === "MUTLIPOST_EXTENSION_PUBLISH" &&
+      response &&
+      typeof response === "object" &&
+      "status" in (response as Record<string, unknown>) &&
+      (((response as { status?: unknown }).status === "STARTED") ||
+        ((response as { status?: unknown }).status === "QUEUED"))
+    ) {
+      publishRequestSources.delete(request.traceId)
+    }
+
     event.source?.postMessage(successResponse(request, response))
   } catch (error) {
     if (request.action === "MUTLIPOST_EXTENSION_PUBLISH") {

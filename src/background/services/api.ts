@@ -294,7 +294,13 @@ export const ping = async (withPlatforms = false) => {
   } else if (!resBody.success && (resBody.error === "CLIENT_NOT_FOUND" || resBody.data?.error === "CLIENT_NOT_FOUND")) {
     await storage.remove("extensionClientId")
   } else if (resBody.success && resBody.data?.action === "NEW_TASK" && resBody.data.url) {
-    chrome.tabs.create({ url: resBody.data.url })
+    try {
+      const taskUrl = new URL(resBody.data.url)
+      taskUrl.searchParams.set("auto", "1")
+      chrome.tabs.create({ url: taskUrl.toString() })
+    } catch {
+      chrome.tabs.create({ url: resBody.data.url })
+    }
   } else if (resBody.success && resBody.data?.action === "NEW_CLIENT" && resBody.data.clientId) {
     await storage.set("extensionClientId", resBody.data.clientId)
   }
