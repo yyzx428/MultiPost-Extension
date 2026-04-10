@@ -60,11 +60,10 @@ type PublishPlatformState = {
 }
 
 type PublishSession = {
-  traceId?: string
+  traceId: string
   taskId?: string
   syncData: SyncData
   createdAt: number
-  status: "queued" | "executing" | "completed_displaying" | "failed_displaying" | "finalized"
   platformOrder: string[]
   platforms: Map<string, PublishPlatformState>
   deferred: Deferred<PublishExecutionResult>
@@ -72,13 +71,6 @@ type PublishSession = {
   popupReady: boolean
   popupInitTimeoutId?: number
   finalized: boolean
-  startedAt?: number
-  finalizedAt?: number
-}
-
-type PublishQueueItem = {
-  traceId: string
-  createdAt: number
 }
 
 type ChainActionSession = {
@@ -319,173 +311,31 @@ function emitRuntimeMessage(action: string, data: unknown) {
   void sendMessage({ action, data }).catch(() => undefined)
 }
 
-const publishSessions = new Map<string, PublishSession>()
-const popupWindowToTrace = new Map<number, string>()
-const publishPlatformTabs = new Map<number, { traceId: string; platformName: string }>()
-const pendingPublishQueue: PublishQueueItem[] = []
-const completedPopupRefs = new Map<string, number>()
+const publishPlatformTabs = new Map<number, string>()
 let currentChainActionData: ChainActionSession | null = null
+let currentPublishRequest: PublishSession | null = null
 const PUBLISH_POPUP_INIT_TIMEOUT_MS = 30_000
 const STALE_PUBLISH_SESSION_TIMEOUT_MS = 60_000
-const QUEUED_PUBLISH_SESSION_TIMEOUT_MS = 30 * 60_000
-const NEXT_PUBLISH_START_DELAY_MS = 1200
-const NEXT_PUBLISH_RETRY_DELAY_MS = 2000
-let activeExecutionTraceId: string | null = null
-let publishQueueStartTimer: number | undefined
 
 function getPublishSession(traceId?: string | null) {
-  if (!traceId) return null
-  return publishSessions.get(traceId) || null
-}
-
-function clearPublishQueueStartTimer() {
-  if (publishQueueStartTimer) {
-    clearTimeout(publishQueueStartTimer)
-    publishQueueStartTimer = undefined
-  }
-}
-
-function removePendingPublishQueueItem(traceId?: string | null) {
-  if (!traceId) return
-  const index = pendingPublishQueue.findIndex((item) => item.traceId === traceId)
-  if (index >= 0) {
-    pendingPublishQueue.splice(index, 1)
-  }
-}
-
-function enqueuePublishSession(session: PublishSession) {
-  if (!session.traceId) return
-  if (pendingPublishQueue.some((item) => item.traceId === session.traceId)) return
-  session.status = "queued"
-  pendingPublishQueue.push({
-    traceId: session.traceId,
-    createdAt: session.createdAt
-  })
+  if (!traceId || !currentPublishRequest) return null
+  return currentPublishRequest.traceId === traceId ? currentPublishRequest : null
 }
 
 function cleanupPublishSession(session: PublishSession) {
-  removePendingPublishQueueItem(session.traceId)
-
-  if (session.traceId) {
-    publishSessions.delete(session.traceId)
+  if (session.popupInitTimeoutId) {
+    clearTimeout(session.popupInitTimeoutId)
+    session.popupInitTimeoutId = undefined
   }
-
-  if (typeof session.popupWindowId === "number") {
-    popupWindowToTrace.delete(session.popupWindowId)
-  }
-
   for (const state of session.platforms.values()) {
     if (typeof state.tabId === "number") {
       publishPlatformTabs.delete(state.tabId)
     }
-  }
-}
-
-async function openPublishPopupForSession(session: PublishSession, anchorWindowId?: number) {
-  if (!session.traceId) return false
-
-  if (session.popupInitTimeoutId) {
-    clearTimeout(session.popupInitTimeoutId)
-  }
-  session.popupInitTimeoutId = setTimeout(() => {
-    void abortPublish(session.traceId, "PUBLISH_WINDOW_TIMEOUT", "Publish window did not initialize in time")
-  }, PUBLISH_POPUP_INIT_TIMEOUT_MS) as unknown as number
-
-  const popupUrl = new URL(chrome.runtime.getURL("tabs/publish.html"))
-  popupUrl.searchParams.set("traceId", session.traceId)
-
-  for (const [completedTraceId, windowId] of completedPopupRefs.entries()) {
-    try {
-      const windowInfo = await chrome.windows.get(windowId, { populate: true })
-      const popupTab = windowInfo.tabs?.find((tab) => typeof tab.id === "number")
-
-      if (!popupTab?.id) {
-        completedPopupRefs.delete(completedTraceId)
-        continue
-      }
-
-      await chrome.tabs.update(popupTab.id, {
-        url: popupUrl.toString(),
-        active: true
-      })
-
-      session.popupWindowId = windowId
-      completedPopupRefs.delete(completedTraceId)
-      popupWindowToTrace.set(windowId, session.traceId)
-      return true
-    } catch {
-      completedPopupRefs.delete(completedTraceId)
+    if (state.timeoutId) {
+      clearTimeout(state.timeoutId)
+      state.timeoutId = undefined
     }
   }
-
-  try {
-    const windowInfo = await createSafePopupWindow({
-      url: popupUrl.toString(),
-      width: 800,
-      height: 600,
-      anchorWindowId
-    })
-
-    if (typeof windowInfo.id === "number") {
-      session.popupWindowId = windowInfo.id
-      popupWindowToTrace.set(windowInfo.id, session.traceId)
-    }
-
-    return true
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    await abortPublish(session.traceId, "PUBLISH_WINDOW_CREATE_FAILED", message)
-    return false
-  }
-}
-
-async function startPublishSessionExecution(session: PublishSession, options?: { anchorWindowId?: number }) {
-  if (!session.traceId || session.finalized) return false
-  if (activeExecutionTraceId && activeExecutionTraceId !== session.traceId) return false
-
-  clearPublishQueueStartTimer()
-  activeExecutionTraceId = session.traceId
-  removePendingPublishQueueItem(session.traceId)
-  session.status = "executing"
-  session.startedAt = Date.now()
-
-  const started = await openPublishPopupForSession(session, options?.anchorWindowId)
-  if (!started && activeExecutionTraceId === session.traceId) {
-    activeExecutionTraceId = null
-    scheduleNextQueuedPublishSession(NEXT_PUBLISH_RETRY_DELAY_MS)
-  }
-
-  return started
-}
-
-function scheduleNextQueuedPublishSession(delayMs = NEXT_PUBLISH_START_DELAY_MS) {
-  if (activeExecutionTraceId || publishQueueStartTimer || pendingPublishQueue.length === 0) return
-
-  publishQueueStartTimer = setTimeout(() => {
-    publishQueueStartTimer = undefined
-    void startNextQueuedPublishSession()
-  }, delayMs) as unknown as number
-}
-
-async function startNextQueuedPublishSession() {
-  if (activeExecutionTraceId) return false
-
-  while (pendingPublishQueue.length > 0) {
-    const nextItem = pendingPublishQueue.shift()
-    if (!nextItem) return false
-
-    const session = getPublishSession(nextItem.traceId)
-    if (!session || session.finalized) {
-      continue
-    }
-
-    const started = await startPublishSessionExecution(session)
-    if (started) {
-      return true
-    }
-  }
-
-  return false
 }
 
 function emitPublishProgress(session: PublishSession) {
@@ -537,8 +387,8 @@ function markPublishPlatformRunning(session: PublishSession, platformName: strin
   state.status = "running"
   state.startedAt = state.startedAt || nowIso()
   state.tabId = tabId
-  if (typeof tabId === "number" && session.traceId) {
-    publishPlatformTabs.set(tabId, { traceId: session.traceId, platformName })
+  if (typeof tabId === "number") {
+    publishPlatformTabs.set(tabId, platformName)
   }
   const timeoutMs = platformName.includes("YUNPAN") ? 300_000 : 180_000
   setPlatformTimeout(session, platformName, timeoutMs)
@@ -546,23 +396,18 @@ function markPublishPlatformRunning(session: PublishSession, platformName: strin
 }
 
 function getTrackedPublishPlatformState(tabId: number) {
-  const tracked = publishPlatformTabs.get(tabId)
-  if (!tracked) return null
+  if (!currentPublishRequest) return null
+  const platformName = publishPlatformTabs.get(tabId)
+  if (!platformName) return null
 
-  const session = getPublishSession(tracked.traceId)
-  if (!session) {
-    publishPlatformTabs.delete(tabId)
-    return null
-  }
-
-  const state = session.platforms.get(tracked.platformName)
+  const state = currentPublishRequest.platforms.get(platformName)
   if (!state || isTerminalStatus(state.status)) {
     publishPlatformTabs.delete(tabId)
     return null
   }
 
-  const platformInfo = session.syncData.platforms.find((item) => item.name === state.platformName)
-  return { session, state, platformInfo }
+  const platformInfo = currentPublishRequest.syncData.platforms.find((item) => item.name === state.platformName)
+  return { session: currentPublishRequest, state, platformInfo }
 }
 
 async function maybeMarkPublishFailureFromUrl(tabId: number, currentUrl?: string) {
@@ -601,20 +446,9 @@ async function finalizePublishSession(
 ) {
   if (session.finalized) return session
   session.finalized = true
-  session.finalizedAt = Date.now()
-
-  if (session.popupInitTimeoutId) {
-    clearTimeout(session.popupInitTimeoutId)
-    session.popupInitTimeoutId = undefined
-  }
 
   const finalTime = nowIso()
   for (const state of session.platforms.values()) {
-    if (state.timeoutId) {
-      clearTimeout(state.timeoutId)
-      state.timeoutId = undefined
-    }
-
     if (!isTerminalStatus(state.status)) {
       state.status = overrides?.errorCode ? "failed" : "timeout"
       state.errorCode = overrides?.errorCode || "PLATFORM_TIMEOUT"
@@ -625,16 +459,8 @@ async function finalizePublishSession(
 
   let result = buildPublishExecutionResult(session, overrides)
 
-  session.status = result.status === "COMPLETED" ? "completed_displaying" : "failed_displaying"
-  if (activeExecutionTraceId === session.traceId) {
-    activeExecutionTraceId = null
-    scheduleNextQueuedPublishSession(NEXT_PUBLISH_START_DELAY_MS)
-  } else {
-    removePendingPublishQueueItem(session.traceId)
-  }
-
-  if (session.traceId && typeof session.popupWindowId === "number") {
-    completedPopupRefs.set(session.traceId, session.popupWindowId)
+  if (currentPublishRequest?.traceId === session.traceId) {
+    currentPublishRequest = null
   }
 
   cleanupPublishSession(session)
@@ -678,6 +504,10 @@ async function markPublishPlatformResult(result: {
   const trackedByTab = typeof result.tabId === "number" ? getTrackedPublishPlatformState(result.tabId) : null
   const session = getPublishSession(result.traceId) || trackedByTab?.session
   if (!session) return { success: false, error: "NO_PUBLISH_IN_PROGRESS" }
+
+  if (result.traceId && result.traceId !== session.traceId) {
+    return { success: false, error: "NO_PUBLISH_IN_PROGRESS" }
+  }
 
   const state = session.platforms.get(result.platformName || trackedByTab?.state.platformName || "")
   if (!state) return { success: false, error: "UNKNOWN_PLATFORM" }
@@ -737,47 +567,27 @@ async function tabExists(tabId?: number) {
 }
 
 async function recoverStalePublishSessions() {
-  const sessions = [...publishSessions.values()]
+  if (!currentPublishRequest || currentPublishRequest.finalized) return
 
-  for (const session of sessions) {
-    if (session.finalized) {
-      cleanupPublishSession(session)
-      continue
-    }
+  const session = currentPublishRequest
+  const ageMs = Date.now() - session.createdAt
+  const hasStartedPlatform = [...session.platforms.values()].some((item) => item.status !== "pending")
+  const hasLivePlatformTab = (
+    await Promise.all(
+      [...session.platforms.values()]
+        .map((item) => item.tabId)
+        .filter((id): id is number => typeof id === "number")
+        .map((tabId) => tabExists(tabId)),
+    )
+  ).some(Boolean)
+  const hasLivePopup = await popupWindowExists(session.popupWindowId)
 
-    const ageMs = Date.now() - session.createdAt
-    if (session.status === "queued") {
-      const shouldRecoverQueued =
-        (!activeExecutionTraceId && ageMs > STALE_PUBLISH_SESSION_TIMEOUT_MS) ||
-        ageMs > QUEUED_PUBLISH_SESSION_TIMEOUT_MS
+  const shouldRecover =
+    (!hasStartedPlatform && !hasLivePopup) ||
+    (!hasStartedPlatform && ageMs > STALE_PUBLISH_SESSION_TIMEOUT_MS) ||
+    (!hasLivePopup && !hasLivePlatformTab && ageMs > STALE_PUBLISH_SESSION_TIMEOUT_MS)
 
-      if (shouldRecoverQueued) {
-        await finalizePublishSession(session, {
-          errorCode: "STALE_PUBLISH_SESSION",
-          errorMessage: "Recovered stale queued publish session",
-        })
-      }
-      continue
-    }
-
-    const hasStartedPlatform = [...session.platforms.values()].some((item) => item.status !== "pending")
-    const hasLivePlatformTab = (
-      await Promise.all(
-        [...session.platforms.values()]
-          .map((item) => item.tabId)
-          .filter((id): id is number => typeof id === "number")
-          .map((tabId) => tabExists(tabId)),
-      )
-    ).some(Boolean)
-    const hasLivePopup = await popupWindowExists(session.popupWindowId)
-
-    const shouldRecover =
-      (!hasStartedPlatform && !hasLivePopup) ||
-      (!hasStartedPlatform && ageMs > STALE_PUBLISH_SESSION_TIMEOUT_MS) ||
-      (!hasLivePopup && !hasLivePlatformTab && ageMs > STALE_PUBLISH_SESSION_TIMEOUT_MS)
-
-    if (!shouldRecover) continue
-
+  if (shouldRecover) {
     await finalizePublishSession(session, {
       errorCode: "STALE_PUBLISH_SESSION",
       errorMessage: "Recovered stale publish session",
@@ -857,15 +667,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 })
 
 chrome.windows.onRemoved.addListener((windowId) => {
-  for (const [traceId, popupWindowId] of completedPopupRefs.entries()) {
-    if (popupWindowId === windowId) {
-      completedPopupRefs.delete(traceId)
-      break
-    }
-  }
-
-  const traceId = popupWindowToTrace.get(windowId)
-  const session = getPublishSession(traceId)
+  const session = currentPublishRequest?.popupWindowId === windowId ? currentPublishRequest : null
   if (!session || session.finalized) return
 
   const hasStartedPlatform = [...session.platforms.values()].some((item) => item.status !== "pending")
@@ -960,18 +762,18 @@ router.register("MUTLIPOST_EXTENSION_CLOSE_SOURCE_TAB", async (_request: any, se
   }
 })
 
-router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any, sender) => {
+router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any) => {
   await recoverStalePublishSessions()
 
-  const traceId = request.traceId || crypto.randomUUID()
-  if (publishSessions.has(traceId)) {
+  if (currentPublishRequest && !currentPublishRequest.finalized) {
     return {
       success: false,
-      error: "PUBLISH_TRACE_ALREADY_EXISTS",
-      errorCode: "PUBLISH_TRACE_ALREADY_EXISTS"
+      error: "PUBLISH_ALREADY_IN_PROGRESS",
+      errorCode: "PUBLISH_ALREADY_IN_PROGRESS"
     }
   }
 
+  const traceId = request.traceId || crypto.randomUUID()
   const data = {
     ...(request.data as SyncData),
     traceId
@@ -1000,31 +802,34 @@ router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any, sender) => {
     taskId: data.taskId,
     syncData: data,
     createdAt: Date.now(),
-    status: "queued",
     platformOrder,
     platforms,
     deferred,
     popupReady: false,
     finalized: false
   }
-  publishSessions.set(traceId, session)
 
-  if (activeExecutionTraceId) {
-    enqueuePublishSession(session)
-    return {
-      traceId,
-      status: "QUEUED"
-    }
-  }
+  currentPublishRequest = session
+  session.popupInitTimeoutId = setTimeout(() => {
+    void abortPublish(session.traceId, "PUBLISH_WINDOW_TIMEOUT", "Publish window did not initialize in time")
+  }, PUBLISH_POPUP_INIT_TIMEOUT_MS) as unknown as number
 
-  const started = await startPublishSessionExecution(session, {
-    anchorWindowId: sender.tab?.windowId
-  })
-
-  if (!started) {
+  try {
+    const popupUrl = new URL(chrome.runtime.getURL("tabs/publish.html"))
+    popupUrl.searchParams.set("traceId", session.traceId)
+    const popupWindow = await createSafePopupWindow({
+      url: popupUrl.toString(),
+      width: 800,
+      height: 600
+    })
+    session.popupWindowId = popupWindow.id
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    currentPublishRequest = null
+    cleanupPublishSession(session)
     return {
       success: false,
-      error: "PUBLISH_WINDOW_CREATE_FAILED",
+      error: message,
       errorCode: "PUBLISH_WINDOW_CREATE_FAILED"
     }
   }
@@ -1081,9 +886,6 @@ router.register("MUTLIPOST_EXTENSION_PUBLISH_NOW", async (request: any) => {
   if (!session) {
     return { success: false, error: "NO_PUBLISH_IN_PROGRESS", errorCode: "BACKGROUND_REJECTED" }
   }
-  if (activeExecutionTraceId !== traceId) {
-    return { success: false, error: "PUBLISH_NOT_ACTIVE", errorCode: "PUBLISH_NOT_ACTIVE" }
-  }
 
   const data = (request.data?.syncData || request.data) as SyncData
   if (!Array.isArray(data.platforms) || data.platforms.length === 0) {
@@ -1092,7 +894,6 @@ router.register("MUTLIPOST_EXTENSION_PUBLISH_NOW", async (request: any) => {
 
   try {
     session.syncData = data
-    session.status = "executing"
     const tabs = await createTabsForPlatforms(data)
     addTabsManagerMessages({
       syncData: data,

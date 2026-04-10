@@ -142,8 +142,7 @@ async function defaultHandler<T>(request: ExtensionExternalRequest<T>, event: Me
       response &&
       typeof response === "object" &&
       "status" in (response as Record<string, unknown>) &&
-      (((response as { status?: unknown }).status === "STARTED") ||
-        ((response as { status?: unknown }).status === "QUEUED"))
+      (response as { status?: unknown }).status === "STARTED"
     ) {
       publishRequestSources.delete(request.traceId)
     }
