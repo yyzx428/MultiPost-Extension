@@ -67,7 +67,9 @@ type PublishSession = {
   platformOrder: string[]
   platforms: Map<string, PublishPlatformState>
   deferred: Deferred<PublishExecutionResult>
+  sourceWebTabId?: number
   popupWindowId?: number
+  popupTabId?: number
   popupReady: boolean
   popupInitTimeoutId?: number
   finalized: boolean
@@ -95,6 +97,11 @@ function createDeferred<T>(): Deferred<T> {
 
 function nowIso() {
   return new Date().toISOString()
+}
+
+function isBoundsWindowCreateError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes("Bounds must be at least 50% within visible screen space")
 }
 
 function isTerminalStatus(status: PublishPlatformRuntimeStatus) {
@@ -314,12 +321,13 @@ function emitRuntimeMessage(action: string, data: unknown) {
 const publishPlatformTabs = new Map<number, string>()
 let currentChainActionData: ChainActionSession | null = null
 let currentPublishRequest: PublishSession | null = null
+const publishSessions = new Map<string, PublishSession>()
 const PUBLISH_POPUP_INIT_TIMEOUT_MS = 30_000
 const STALE_PUBLISH_SESSION_TIMEOUT_MS = 60_000
 
 function getPublishSession(traceId?: string | null) {
-  if (!traceId || !currentPublishRequest) return null
-  return currentPublishRequest.traceId === traceId ? currentPublishRequest : null
+  if (!traceId) return null
+  return publishSessions.get(traceId) || null
 }
 
 function cleanupPublishSession(session: PublishSession) {
@@ -336,6 +344,84 @@ function cleanupPublishSession(session: PublishSession) {
       state.timeoutId = undefined
     }
   }
+}
+
+function getPublishPlatformTabIds(session: PublishSession) {
+  return [...new Set(
+    [...session.platforms.values()]
+      .map((state) => state.tabId)
+      .filter((tabId): tabId is number => typeof tabId === "number"),
+  )]
+}
+
+function detachPublishSession(session: PublishSession) {
+  if (currentPublishRequest?.traceId === session.traceId) {
+    currentPublishRequest = null
+  }
+  publishSessions.delete(session.traceId)
+}
+
+async function closeTabIfExists(tabId?: number) {
+  if (typeof tabId !== "number") return
+
+  try {
+    await chrome.tabs.get(tabId)
+  } catch {
+    return
+  }
+
+  try {
+    await chrome.tabs.remove(tabId)
+  } catch {
+    // ignore already-closed tabs
+  }
+}
+
+async function closeWindowIfExists(windowId?: number) {
+  if (typeof windowId !== "number") return
+
+  try {
+    await chrome.windows.get(windowId)
+  } catch {
+    return
+  }
+
+  try {
+    await chrome.windows.remove(windowId)
+  } catch {
+    // ignore already-closed windows
+  }
+}
+
+async function closePublishSessionResources(
+  session: PublishSession,
+  options?: { closePlatforms?: boolean },
+) {
+  const closePlatforms = options?.closePlatforms === true
+  const tabIdsToClose = new Set<number>()
+
+  if (typeof session.popupTabId === "number") {
+    tabIdsToClose.add(session.popupTabId)
+  }
+
+  if (typeof session.sourceWebTabId === "number") {
+    tabIdsToClose.add(session.sourceWebTabId)
+  }
+
+  if (closePlatforms) {
+    for (const tabId of getPublishPlatformTabIds(session)) {
+      tabIdsToClose.add(tabId)
+    }
+  }
+
+  await closeWindowIfExists(session.popupWindowId)
+
+  for (const tabId of tabIdsToClose) {
+    await closeTabIfExists(tabId)
+  }
+
+  cleanupPublishSession(session)
+  detachPublishSession(session)
 }
 
 function emitPublishProgress(session: PublishSession) {
@@ -580,7 +666,11 @@ async function recoverStalePublishSessions() {
         .map((tabId) => tabExists(tabId)),
     )
   ).some(Boolean)
-  const hasLivePopup = await popupWindowExists(session.popupWindowId)
+  const [hasLivePopupWindow, hasLivePopupTab] = await Promise.all([
+    popupWindowExists(session.popupWindowId),
+    tabExists(session.popupTabId),
+  ])
+  const hasLivePopup = hasLivePopupWindow || hasLivePopupTab
 
   const shouldRecover =
     (!hasStartedPlatform && !hasLivePopup) ||
@@ -651,6 +741,19 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   tabsManagerHandleTabRemoved(tabId)
+
+  const publishPopupSession = currentPublishRequest?.popupTabId === tabId ? currentPublishRequest : null
+  if (publishPopupSession && !publishPopupSession.finalized) {
+    const hasStartedPlatform = [...publishPopupSession.platforms.values()].some((item) => item.status !== "pending")
+    if (!hasStartedPlatform) {
+      void abortPublish(
+        publishPopupSession.traceId,
+        "PUBLISH_WINDOW_CLOSED",
+        "Publish window closed before execution started",
+      )
+      return
+    }
+  }
 
   const tracked = getTrackedPublishPlatformState(tabId)
   if (!tracked) return
@@ -762,7 +865,19 @@ router.register("MUTLIPOST_EXTENSION_CLOSE_SOURCE_TAB", async (_request: any, se
   }
 })
 
-router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any) => {
+router.register("MUTLIPOST_EXTENSION_CLOSE_PUBLISH_SESSION", async (request: any) => {
+  const traceId = request.data?.traceId as string | undefined
+  const closePlatforms = request.data?.closePlatforms === true
+  const session = getPublishSession(traceId)
+  if (!session) {
+    return { success: true, ignored: true }
+  }
+
+  void closePublishSessionResources(session, { closePlatforms })
+  return { success: true }
+})
+
+router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any, sender) => {
   await recoverStalePublishSessions()
 
   if (currentPublishRequest && !currentPublishRequest.finalized) {
@@ -805,11 +920,13 @@ router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any) => {
     platformOrder,
     platforms,
     deferred,
+    sourceWebTabId: sender.tab?.id,
     popupReady: false,
     finalized: false
   }
 
   currentPublishRequest = session
+  publishSessions.set(session.traceId, session)
   session.popupInitTimeoutId = setTimeout(() => {
     void abortPublish(session.traceId, "PUBLISH_WINDOW_TIMEOUT", "Publish window did not initialize in time")
   }, PUBLISH_POPUP_INIT_TIMEOUT_MS) as unknown as number
@@ -817,15 +934,28 @@ router.register("MUTLIPOST_EXTENSION_PUBLISH", async (request: any) => {
   try {
     const popupUrl = new URL(chrome.runtime.getURL("tabs/publish.html"))
     popupUrl.searchParams.set("traceId", session.traceId)
-    const popupWindow = await createSafePopupWindow({
-      url: popupUrl.toString(),
-      width: 800,
-      height: 600
-    })
-    session.popupWindowId = popupWindow.id
+    try {
+      const popupWindow = await createSafePopupWindow({
+        url: popupUrl.toString(),
+        width: 800,
+        height: 600
+      })
+      session.popupWindowId = popupWindow.id
+    } catch (error) {
+      if (!isBoundsWindowCreateError(error)) {
+        throw error
+      }
+
+      const popupTab = await chrome.tabs.create({
+        url: popupUrl.toString(),
+        active: true
+      })
+      session.popupTabId = popupTab.id
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     currentPublishRequest = null
+    publishSessions.delete(session.traceId)
     cleanupPublishSession(session)
     return {
       success: false,

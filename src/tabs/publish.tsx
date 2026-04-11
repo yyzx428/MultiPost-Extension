@@ -416,10 +416,31 @@ export default function Publish() {
   }
 
   async function handleCloseWindow(shouldCloseTabs = false) {
-    if (shouldCloseTabs || syncCloseTabsRef.current) {
-      await handleCloseAllTabs()
+    const traceId = syncDataRef.current?.traceId || popupTraceId
+    const closePlatforms = shouldCloseTabs || syncCloseTabsRef.current
+
+    if (!traceId) {
+      if (closePlatforms) {
+        await handleCloseAllTabs()
+      }
+      window.close()
+      return
     }
-    window.close()
+
+    try {
+      await chrome.runtime.sendMessage({
+        action: "MUTLIPOST_EXTENSION_CLOSE_PUBLISH_SESSION",
+        data: {
+          traceId,
+          closePlatforms
+        }
+      })
+    } catch {
+      if (closePlatforms) {
+        await handleCloseAllTabs()
+      }
+      window.close()
+    }
   }
 
   async function requestPublishNow(processedData: SyncData) {
