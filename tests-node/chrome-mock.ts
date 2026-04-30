@@ -41,9 +41,13 @@ export function createChromeMock() {
   const onInstalled = createEvent<[any]>()
   const tabsOnUpdated = createEvent<[number, any, any]>()
   const tabsOnRemoved = createEvent<[number]>()
+  const windowsOnRemoved = createEvent<[number]>()
 
   const windowsCreated: any[] = []
   const tabsSentMessages: Array<{ tabId: number; message: any }> = []
+  const runtimeSentMessages: any[] = []
+  const windowsById = new Map<number, any>()
+  let nextWindowId = 1
 
   const chromeMock: any = {
     runtime: {
@@ -56,6 +60,10 @@ export function createChromeMock() {
         `chrome-extension://test-extension-id/${String(path).replace(/^\/+/, "")}`,
       getManifest: () => ({ version: "0.0.0-test" }),
       openOptionsPage: async () => null,
+      sendMessage: async (message: any) => {
+        runtimeSentMessages.push(message)
+        return null
+      },
       __dispatchMessage: (message: any, sender: ChromeSender = {}) => {
         const d = deferred<any>()
         let resolved = false
@@ -92,12 +100,42 @@ export function createChromeMock() {
 
     windows: {
       create: async (opts: any) => {
-        const w = { id: windowsCreated.length + 1, ...opts }
+        const w = { id: nextWindowId++, ...opts }
         windowsCreated.push(w)
+        windowsById.set(w.id, w)
         return w
       },
-      update: async (_windowId: number, _opts: any) => null,
-      getAll: async () => [{ id: 1, type: "normal" }]
+      update: async (windowId: number, opts: any) => {
+        const existing = windowsById.get(windowId)
+        if (!existing) {
+          throw new Error(`No window with id: ${windowId}`)
+        }
+
+        const updated = { ...existing, ...opts }
+        windowsById.set(windowId, updated)
+        return updated
+      },
+      get: async (windowId: number) => {
+        const existing = windowsById.get(windowId)
+        if (!existing) {
+          throw new Error(`No window with id: ${windowId}`)
+        }
+        return existing
+      },
+      remove: async (windowId: number) => {
+        const existing = windowsById.get(windowId)
+        if (!existing) {
+          throw new Error(`No window with id: ${windowId}`)
+        }
+
+        windowsById.delete(windowId)
+        for (const listener of windowsOnRemoved.__listeners()) {
+          listener(windowId)
+        }
+        return null
+      },
+      getAll: async () => Array.from(windowsById.values()),
+      onRemoved: windowsOnRemoved
     },
 
     scripting: {
@@ -106,7 +144,8 @@ export function createChromeMock() {
 
     __records: {
       windowsCreated,
-      tabsSentMessages
+      tabsSentMessages,
+      runtimeSentMessages
     },
 
     __resetAll: () => {
@@ -115,8 +154,12 @@ export function createChromeMock() {
       chromeMock.runtime.onInstalled.__clear()
       chromeMock.tabs.onUpdated.__clear()
       chromeMock.tabs.onRemoved.__clear()
+      chromeMock.windows.onRemoved.__clear()
       windowsCreated.length = 0
       tabsSentMessages.length = 0
+      runtimeSentMessages.length = 0
+      windowsById.clear()
+      nextWindowId = 1
     }
   }
 

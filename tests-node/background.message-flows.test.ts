@@ -104,6 +104,9 @@ export const tests: TestCase[] = [
         { tab: { id: 99, windowId: 100 } }
       )
 
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
       assert.equal(chromeAny.__records.windowsCreated.length, 1)
       assert.ok(String(chromeAny.__records.windowsCreated[0].url).includes("tabs/publish.html"))
 
@@ -124,11 +127,21 @@ export const tests: TestCase[] = [
       })
 
       const res = await pending
-      assert.equal(res.status, "FAILED")
-      assert.equal(res.totalPlatforms, 2)
-      assert.equal(res.successCount, 1)
-      assert.equal(res.failureCount, 1)
-      assert.equal(res.results.length, 2)
+      assert.equal(res.status, "STARTED")
+      assert.equal(res.traceId, "t1")
+
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const completion = chromeAny.__records.runtimeSentMessages.find(
+        (message: any) => message.action === "MUTLIPOST_EXTENSION_PUBLISH_COMPLETE"
+      )
+      assert.ok(completion)
+      assert.equal(completion.data.status, "FAILED")
+      assert.equal(completion.data.totalPlatforms, 2)
+      assert.equal(completion.data.successCount, 1)
+      assert.equal(completion.data.failureCount, 1)
+      assert.equal(completion.data.results.length, 2)
     }
   },
   {
